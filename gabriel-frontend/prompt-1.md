@@ -35,6 +35,10 @@ Include these in `package.json`:
 - tailwindcss, postcss, autoprefixer
 - lucide-react (for icons)
 
+STABILITY NOTE (IMPORTANT FOR ONE-SHOT SETUP):
+- Use Tailwind CSS v3.x for this prompt chain (`tailwindcss@^3`), so `tailwind.config.js` and `postcss.config.js` setup remains consistent.
+- If the Vite scaffold asks `Install with npm and start now?`, choose `No` to avoid blocking the terminal in auto-run environments.
+
 ENVIRONMENT SETUP:
 Create `.env.example` with:
 - `VITE_API_BASE_URL=http://127.0.0.1:8000`

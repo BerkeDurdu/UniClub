@@ -27,6 +27,10 @@ Create reusable form components in `src/components/forms/`:
 - Fields: title, description, event_start, event_end, status.
 - Zod rules: title required, `event_end` must be after `event_start`.
 
+Backend alignment note:
+- Since backend `EventCreate` requires `club_id` (and accepts optional `venue_id`), include a Club selector in the event creation UI and send `club_id` in the payload.
+- Optionally include Venue selector and send `venue_id` when selected.
+
 `ParticipantForm`:
 - Fields: first_name, last_name, email.
 - Zod rules: proper email format, names cannot be blank.
