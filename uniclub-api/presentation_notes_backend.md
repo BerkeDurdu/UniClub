@@ -27,3 +27,28 @@ All queries and business rule validations exist inside the Service layer:
 3. List Clubs with `category="Sports"` to demonstrate backend filtering (paginated capabilities).
 4. Attempt to create a conflicting registration duplicate—showcase a `409 Conflict`.
 5. Trigger a deliberate validation violation (like a negative budget) to see `422 Unprocessable Entity` response structure reliably block it.
+
+## 3-Minute Live Swagger Flow (Exact Endpoint Order)
+
+1. `GET /health`
+2. `GET /health/db`
+3. `GET /reports/club-network/{club_id}`
+4. `GET /reports/event-network/{event_id}`
+5. `GET /reports/member-network/{member_id}`
+6. `POST /registrations` (duplicate or invalid state case)
+
+## Speaking Points per Relationship Proof
+
+- Club network: advisor, members, board members, events, messages are all linked and counted.
+- Event network: venue, budget, registrations, participants, sponsorships prove deep event context.
+- Member network: member activity shows club relation, messaging, registration, and participation traces.
+
+## Rehearsal Checklist
+
+- Time management:
+	- 0:00-0:30 architecture overview
+	- 0:30-1:30 relationship report endpoints
+	- 1:30-2:20 validation/conflict demos
+	- 2:20-3:00 Q&A buffer and summary
+- Technical depth terminology: use FK, constraints, enum, partial unique index, migration, service-layer validation.
+- Fluency and engagement: avoid reading directly, explain what each endpoint proves.

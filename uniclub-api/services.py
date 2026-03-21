@@ -518,3 +518,73 @@ class SponsorshipService:
     @staticmethod
     def list_sponsorships_by_event(session: Session, event_id: int) -> list[Sponsorship]:
         return session.exec(select(Sponsorship).where(Sponsorship.event_id == event_id)).all()
+
+
+class ReportService:
+    @staticmethod
+    def get_club_network(session: Session, club_id: int) -> dict:
+        club = ClubService.get_club(session, club_id)
+        advisor = session.exec(select(Advisor).where(Advisor.club_id == club_id)).first()
+        members = session.exec(select(Member).where(Member.club_id == club_id)).all()
+        board_members = session.exec(select(BoardMember).where(BoardMember.club_id == club_id)).all()
+        events = session.exec(select(Event).where(Event.club_id == club_id)).all()
+        messages = session.exec(select(Message).where(Message.club_id == club_id)).all()
+
+        return {
+            "club": club,
+            "advisor": advisor,
+            "members": members,
+            "board_members": board_members,
+            "events": events,
+            "messages": messages,
+            "counts": {
+                "members": len(members),
+                "board_members": len(board_members),
+                "events": len(events),
+                "messages": len(messages),
+            },
+        }
+
+    @staticmethod
+    def get_event_network(session: Session, event_id: int) -> dict:
+        event = EventService.get_event(session, event_id)
+        venue = session.get(Venue, event.venue_id) if event.venue_id else None
+        budget = session.exec(select(Budget).where(Budget.event_id == event_id)).first()
+        registrations = session.exec(select(Registration).where(Registration.event_id == event_id)).all()
+        participants = session.exec(select(Participant).where(Participant.event_id == event_id)).all()
+        sponsorships = session.exec(select(Sponsorship).where(Sponsorship.event_id == event_id)).all()
+
+        return {
+            "event": event,
+            "venue": venue,
+            "budget": budget,
+            "registrations": registrations,
+            "participants": participants,
+            "sponsorships": sponsorships,
+            "counts": {
+                "registrations": len(registrations),
+                "participants": len(participants),
+                "sponsorships": len(sponsorships),
+            },
+        }
+
+    @staticmethod
+    def get_member_network(session: Session, member_id: int) -> dict:
+        member = MemberService.get_member(session, member_id)
+        club = session.get(Club, member.club_id) if member.club_id else None
+        messages = session.exec(select(Message).where(Message.member_id == member_id)).all()
+        registrations = session.exec(select(Registration).where(Registration.member_id == member_id)).all()
+        participant_records = session.exec(select(Participant).where(Participant.member_id == member_id)).all()
+
+        return {
+            "member": member,
+            "club": club,
+            "messages": messages,
+            "registrations": registrations,
+            "participant_records": participant_records,
+            "counts": {
+                "messages": len(messages),
+                "registrations": len(registrations),
+                "participant_records": len(participant_records),
+            },
+        }

@@ -53,3 +53,41 @@ uvicorn main:app --reload
 - Health check: `http://127.0.0.1:8000/health/db`
 
 [Screenshot place folder here for future reference]
+
+## Database Relationship Proof
+
+You can verify relationship integrity using SQL JOINs after seeding:
+
+```sql
+SELECT c.name AS club, a.full_name AS advisor
+FROM club c
+LEFT JOIN advisor a ON a.club_id = c.id;
+
+SELECT e.title, v.name AS venue, COUNT(r.id) AS registration_count
+FROM event e
+LEFT JOIN venue v ON v.id = e.venue_id
+LEFT JOIN registration r ON r.event_id = e.id
+GROUP BY e.id, e.title, v.name;
+```
+
+For full evidence, see `database_relationship_proof.md`.
+
+## Screenshots
+
+- `../screenshots/screenshot-backend-data.png`: backend-driven list/detail sample
+- `../screenshots/screenshot-swagger-success.png`: Swagger `/docs` success responses
+
+Replace placeholders with real captures before final submission.
+
+## Rubric Mapping
+
+- Code correctness & topic inclusion: 11-entity relational backend with PostgreSQL and modular FastAPI architecture.
+- Robustness & edge-case handling: service-layer business rules, conflict checks, and health diagnostics.
+- Technical documentation quality: architecture notes, relationship proof markdown, and test scenarios.
+- Technical depth: PostgreSQL constraints, enum modeling, partial unique index strategy, Alembic support.
+
+## Final Submission
+
+- GitHub URL: `<ADD_REPOSITORY_URL_HERE>`
+- Presentation file: `<ADD_PRESENTATION_FILE_NAME.pdf_or_pptx>`
+- Screenshot location: repository root `screenshots/`

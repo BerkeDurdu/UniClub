@@ -78,3 +78,18 @@ This file documents manual tests you can run using Swagger UI to ensure the vali
 
 26. **Internal server error fallback behavior**:
     - A critical failure deep inside python code intentionally won't crash the uvicorn worker, rather returns a clean JSON response: `500 Internal Server error occurred`.
+
+27. **Healthy startup scenario**:
+    - Run `uvicorn main:app --reload` and verify startup logs complete without crash.
+
+28. **Relationship report endpoint - club network**:
+    - `GET /reports/club-network/{club_id}` should return nested advisor/members/board_members/events/messages with `counts`.
+
+29. **Relationship report endpoint - event network**:
+    - `GET /reports/event-network/{event_id}` should return nested venue/budget/registrations/participants/sponsorships with `counts`.
+
+30. **Relationship report endpoint - member network**:
+    - `GET /reports/member-network/{member_id}` should return nested club/messages/registrations/participant_records with `counts`.
+
+31. **Database health failure fallback**:
+    - Stop Postgres temporarily, call `GET /health/db`, verify `503` and safe error message payload.

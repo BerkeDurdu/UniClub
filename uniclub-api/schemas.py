@@ -235,3 +235,35 @@ class SponsorshipResponse(ResponseSchema):
     amount: float
     agreement_date: date
     event_id: int
+
+
+# ==========================
+# REPORT SCHEMAS
+# ==========================
+class ClubNetworkReport(ResponseSchema):
+    club: ClubResponse
+    advisor: Optional[AdvisorResponse] = None
+    members: List[MemberResponse]
+    board_members: List[BoardMemberResponse]
+    events: List[EventResponse]
+    messages: List[MessageResponse]
+    counts: dict[str, int]
+
+
+class EventNetworkReport(ResponseSchema):
+    event: EventResponse
+    venue: Optional[VenueResponse] = None
+    budget: Optional[BudgetResponse] = None
+    registrations: List[RegistrationResponse]
+    participants: List[ParticipantResponse]
+    sponsorships: List[SponsorshipResponse]
+    counts: dict[str, int]
+
+
+class MemberNetworkReport(ResponseSchema):
+    member: MemberResponse
+    club: Optional[ClubResponse] = None
+    messages: List[MessageResponse]
+    registrations: List[RegistrationResponse]
+    participant_records: List[ParticipantResponse]
+    counts: dict[str, int]
