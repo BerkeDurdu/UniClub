@@ -118,6 +118,18 @@ export interface ClubCreatePayload {
   founded_date: string;
 }
 
+export interface ClubLocalProfile {
+  description?: string;
+  category?: string;
+  founded_date?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  communication_channel?: string;
+  social_link?: string;
+  sponsor_contact_name?: string;
+  sponsor_contact_role?: string;
+}
+
 export interface EventCreatePayload {
   title: string;
   description: string;

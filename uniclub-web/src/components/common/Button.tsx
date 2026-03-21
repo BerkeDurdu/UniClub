@@ -27,7 +27,7 @@ function Button({
       disabled={disabled || isLoading}
       {...props}
     >
-      {isLoading ? "Yukleniyor..." : children}
+      {isLoading ? "Loading..." : children}
     </button>
   );
 }

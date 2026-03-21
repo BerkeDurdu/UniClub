@@ -15,32 +15,49 @@ import {
 } from "../api/services/registrationService";
 import { getSponsorshipsByEvent } from "../api/services/sponsorshipService";
 import { getVenues } from "../api/services/venueService";
+import AddItemBox from "../components/common/AddItemBox";
 import Badge from "../components/common/Badge";
 import Button from "../components/common/Button";
 import Card from "../components/common/Card";
+import EditableField from "../components/common/EditableField";
 import ErrorMessage from "../components/common/ErrorMessage";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import ParticipantForm from "../components/forms/ParticipantForm";
 
 function EventDetailPage() {
   const params = useParams();
-  const eventId = Number(params.id);
+  const parsedEventId = Number.parseInt(params.id ?? "", 10);
+  const isValidEventId = Number.isInteger(parsedEventId) && parsedEventId > 0;
+  const eventId = isValidEventId ? parsedEventId : 0;
   const queryClient = useQueryClient();
   const [selectedMemberId, setSelectedMemberId] = useState<number>(0);
+  const [eventNote, setEventNote] = useState("No notes yet.");
+  const [metadataItems, setMetadataItems] = useState<string[]>([]);
 
-  const eventQuery = useQuery({ queryKey: ["event", eventId], queryFn: () => getEventById(eventId), enabled: Number.isFinite(eventId) });
-  const budgetQuery = useQuery({ queryKey: ["event-budget", eventId], queryFn: () => getBudgetByEvent(eventId), enabled: Number.isFinite(eventId) });
-  const registrationsQuery = useQuery({ queryKey: ["event-registrations", eventId], queryFn: () => getRegistrations(eventId), enabled: Number.isFinite(eventId) });
-  const participantsQuery = useQuery({ queryKey: ["event-participants", eventId], queryFn: () => getEventParticipants(eventId), enabled: Number.isFinite(eventId) });
+  const eventQuery = useQuery({ queryKey: ["event", eventId], queryFn: () => getEventById(eventId), enabled: isValidEventId });
+  const budgetQuery = useQuery({ queryKey: ["event-budget", eventId], queryFn: () => getBudgetByEvent(eventId), enabled: isValidEventId });
+  const registrationsQuery = useQuery({ queryKey: ["event-registrations", eventId], queryFn: () => getRegistrations(eventId), enabled: isValidEventId });
+  const participantsQuery = useQuery({ queryKey: ["event-participants", eventId], queryFn: () => getEventParticipants(eventId), enabled: isValidEventId });
   const membersQuery = useQuery({ queryKey: ["members", "for-registration"], queryFn: () => getMembers({ limit: 300 }) });
-  const sponsorshipsQuery = useQuery({ queryKey: ["event-sponsorships", eventId], queryFn: () => getSponsorshipsByEvent(eventId), enabled: Number.isFinite(eventId) });
+  const sponsorshipsQuery = useQuery({ queryKey: ["event-sponsorships", eventId], queryFn: () => getSponsorshipsByEvent(eventId), enabled: isValidEventId });
   const venuesQuery = useQuery({ queryKey: ["venues", "all"], queryFn: getVenues });
+
+  const registrations = registrationsQuery.data ?? [];
+  const registeredMemberIds = new Set(registrations.map((registration) => registration.member_id));
+  const registerableMembers = useMemo(
+    () => (membersQuery.data ?? []).filter((member) => !registeredMemberIds.has(member.id)),
+    [membersQuery.data, registrations]
+  );
 
   const registerMutation = useMutation({
     mutationFn: registerForEvent,
     onSuccess: async () => {
       toast.success("Registration successful.");
       await queryClient.invalidateQueries({ queryKey: ["event-registrations", eventId] });
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : "Registration failed.";
+      toast.error(message);
     },
   });
 
@@ -50,7 +67,15 @@ function EventDetailPage() {
       toast.success("Participant added.");
       await queryClient.invalidateQueries({ queryKey: ["event-participants", eventId] });
     },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : "Could not add participant.";
+      toast.error(message);
+    },
   });
+
+  if (!isValidEventId) {
+    return <ErrorMessage message="Invalid event ID." />;
+  }
 
   if (
     [eventQuery, budgetQuery, registrationsQuery, participantsQuery, sponsorshipsQuery, membersQuery, venuesQuery].some(
@@ -65,12 +90,12 @@ function EventDetailPage() {
       (query) => query.isError
     )
   ) {
-    return <ErrorMessage message="Etkinlik detayları alınamadı." />;
+    return <ErrorMessage message="Could not load event details." />;
   }
 
   const event = eventQuery.data;
   if (!event) {
-    return <ErrorMessage message="Event bulunamadı." />;
+    return <ErrorMessage message="Event not found." />;
   }
 
   const isRegistrationDisabled =
@@ -78,19 +103,10 @@ function EventDetailPage() {
 
   const registrationDisabledReason =
     event.status === "Completed"
-      ? "Completed etkinliklere kayıt kapalıdır."
-      : "Canceled etkinliklere kayıt kapalıdır.";
-
-  const registeredMemberIds = new Set(
-    (registrationsQuery.data ?? []).map((registration) => registration.member_id)
-  );
+      ? "Registrations are closed for completed events."
+      : "Registrations are closed for canceled events.";
 
   const venue = (venuesQuery.data ?? []).find((item) => item.id === event.venue_id);
-
-  const registerableMembers = useMemo(
-    () => (membersQuery.data ?? []).filter((member) => !registeredMemberIds.has(member.id)),
-    [membersQuery.data, registeredMemberIds]
-  );
 
   return (
     <section className="space-y-4">
@@ -120,14 +136,14 @@ function EventDetailPage() {
               <p>Notes: {budgetQuery.data.notes || "-"}</p>
             </div>
           ) : (
-            <p className="mt-2 text-sm text-slate">Budget kaydı bulunamadı.</p>
+            <p className="mt-2 text-sm text-slate">No budget record found.</p>
           )}
         </Card>
 
         <Card>
           <h3 className="headline text-xl font-semibold text-ink">Sponsorships</h3>
           {(sponsorshipsQuery.data ?? []).length === 0 ? (
-            <p className="mt-2 text-sm text-slate">Sponsorluk yok.</p>
+            <p className="mt-2 text-sm text-slate">No sponsorships yet.</p>
           ) : (
             <ul className="mt-2 space-y-2 text-sm text-slate">
               {(sponsorshipsQuery.data ?? []).map((sponsorship) => (
@@ -144,7 +160,7 @@ function EventDetailPage() {
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="headline text-xl font-semibold text-ink">Registrations</h3>
-            <span className="text-xs text-slate">{(registrationsQuery.data ?? []).length} kayıt</span>
+            <span className="text-xs text-slate">{registrations.length} registered</span>
           </div>
 
           <div className="mt-3 space-y-2">
@@ -168,11 +184,11 @@ function EventDetailPage() {
               disabled={isRegistrationDisabled || selectedMemberId === 0}
               title={isRegistrationDisabled ? registrationDisabledReason : "Register for Event"}
               isLoading={registerMutation.isPending}
-              onClick={async () => {
+              onClick={() => {
                 if (selectedMemberId === 0) {
                   return;
                 }
-                await registerMutation.mutateAsync({
+                registerMutation.mutate({
                   event_id: eventId,
                   member_id: selectedMemberId,
                 });
@@ -186,7 +202,7 @@ function EventDetailPage() {
           </div>
 
           <ul className="mt-3 space-y-1 text-sm text-slate">
-            {(registrationsQuery.data ?? []).map((registration) => (
+            {registrations.map((registration) => (
               <li key={registration.id}>Member #{registration.member_id}</li>
             ))}
           </ul>
@@ -211,6 +227,48 @@ function EventDetailPage() {
           </ul>
         </Card>
       </div>
+
+      <Card>
+        <h3 className="headline text-xl font-semibold text-ink">Event Metadata</h3>
+        <div className="mt-3 space-y-3">
+          <EditableField
+            label="Event Note"
+            multiline
+            value={eventNote}
+            onSave={async (nextValue) => {
+              setEventNote(nextValue);
+              toast.success("Event note updated locally.");
+            }}
+          />
+
+          <AddItemBox
+            title="Metadata Labels"
+            placeholder="Add a label, e.g. keynote"
+            buttonLabel="Add Label"
+            validate={(value) =>
+              metadataItems.some((item) => item.toLowerCase() === value.toLowerCase())
+                ? "This label already exists."
+                : null
+            }
+            onAdd={async (value) => {
+              setMetadataItems((prev) => [...prev, value]);
+              toast.success("Metadata label added.");
+            }}
+          />
+
+          {metadataItems.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {metadataItems.map((item) => (
+                <span key={item} className="rounded-full bg-[#EAF0F8] px-3 py-1 text-xs font-semibold text-ink">
+                  {item}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate">No metadata labels yet.</p>
+          )}
+        </div>
+      </Card>
     </section>
   );
 }

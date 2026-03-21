@@ -17,7 +17,7 @@ apiClient.interceptors.response.use(
     const message =
       typeof detail === "string"
         ? detail
-        : "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.";
+        : "An unexpected error occurred. Please try again.";
 
     if (status && [400, 404, 409, 422].includes(status)) {
       toast.error(message);

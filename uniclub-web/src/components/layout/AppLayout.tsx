@@ -1,5 +1,8 @@
 import { Compass, Users, CalendarDays, Blocks } from "lucide-react";
+import toast from "react-hot-toast";
 import { NavLink, Outlet } from "react-router-dom";
+import { getCurrentUser, logout } from "../../api/services/authService";
+import Button from "../common/Button";
 import HealthIndicator from "./HealthIndicator";
 
 const navItems = [
@@ -10,6 +13,8 @@ const navItems = [
 ];
 
 function AppLayout() {
+  const user = getCurrentUser();
+
   return (
     <div className="min-h-screen text-ink">
       <header className="sticky top-0 z-20 border-b border-slate/20 bg-white/85 backdrop-blur-md">
@@ -32,6 +37,21 @@ function AppLayout() {
                 <span className="hidden sm:inline">{label}</span>
               </NavLink>
             ))}
+            <div className="ml-2 hidden text-right sm:block">
+              <p className="text-xs text-slate">Signed in as</p>
+              <p className="text-sm font-semibold text-ink">{user?.fullName ?? "User"}</p>
+            </div>
+            <Button
+              variant="ghost"
+              className="ml-2"
+              onClick={() => {
+                logout();
+                toast.success("Logged out.");
+                window.location.href = "/auth/login";
+              }}
+            >
+              Logout
+            </Button>
           </nav>
         </div>
       </header>

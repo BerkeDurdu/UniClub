@@ -54,7 +54,7 @@ function EventsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="headline text-3xl font-bold text-ink">Events</h2>
-          <p className="mt-1 text-slate">Etkinlikler, filtreler ve hizli olusturma.</p>
+          <p className="mt-1 text-slate">Explore events, apply filters, and create new ones quickly.</p>
         </div>
         <Button variant="secondary" onClick={() => setIsFormOpen(true)}>
           Create Event
@@ -104,7 +104,7 @@ function EventsPage() {
         </div>
       </Card>
 
-      {eventsQuery.isError ? <ErrorMessage message="Event verileri alınamadı." /> : null}
+      {eventsQuery.isError ? <ErrorMessage message="Could not load event data." /> : null}
 
       {eventsQuery.isLoading ? (
         <div className="space-y-3">
@@ -117,7 +117,7 @@ function EventsPage() {
       {eventsQuery.data && eventsQuery.data.length === 0 ? (
         <EmptyState
           title="No Results Found"
-          description="Bu filtrelerle eslesen bir etkinlik bulunmadi."
+          description="No events matched the selected filters."
         />
       ) : null}
 

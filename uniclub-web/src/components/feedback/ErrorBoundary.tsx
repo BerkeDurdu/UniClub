@@ -28,8 +28,8 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       return (
         <main className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center gap-4 p-6 text-center">
           <h1 className="headline text-3xl font-bold text-ink">Something went wrong</h1>
-          <p className="text-slate">Beklenmeyen bir arayuz hatasi olustu.</p>
-          <Button onClick={() => window.location.reload()}>Sayfayi Yenile</Button>
+          <p className="text-slate">An unexpected interface error occurred.</p>
+          <Button onClick={() => window.location.reload()}>Reload Page</Button>
         </main>
       );
     }
