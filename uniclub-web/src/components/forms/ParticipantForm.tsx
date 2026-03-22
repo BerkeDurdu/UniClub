@@ -1,20 +1,16 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 import type { ParticipantCreatePayload } from "../../types";
 import Button from "../common/Button";
+import { participantSchema } from "../../validation/schemas";
 
-const participantSchema = z.object({
-  first_name: z.string().min(1, "First name is required"),
-  last_name: z.string().min(1, "Last name is required"),
-  email: z
-    .string()
-    .email("Invalid email")
-    .optional()
-    .or(z.literal("")),
+const participantInlineSchema = participantSchema.pick({
+  first_name: true,
+  last_name: true,
+  email: true,
 });
 
-type ParticipantValues = z.infer<typeof participantSchema>;
+type ParticipantValues = { first_name: string; last_name: string; email?: string | undefined };
 
 interface ParticipantFormProps {
   eventId: number;
@@ -29,7 +25,7 @@ function ParticipantForm({ eventId, onSubmit, isSubmitting }: ParticipantFormPro
     reset,
     formState: { errors },
   } = useForm<ParticipantValues>({
-    resolver: zodResolver(participantSchema),
+    resolver: zodResolver(participantInlineSchema),
     defaultValues: {
       first_name: "",
       last_name: "",

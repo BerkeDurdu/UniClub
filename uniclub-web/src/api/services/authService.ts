@@ -45,6 +45,8 @@ function writeUsers(users: StoredUser[]): void {
 
 function setSession(user: AuthUser): void {
   window.localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+  // Store a mock token so the API client sends Authorization headers
+  window.localStorage.setItem("token", `mock-token-${Date.now()}`);
 }
 
 export function getCurrentUser(): AuthUser | null {
@@ -106,4 +108,5 @@ export async function login(payload: LoginPayload): Promise<AuthUser> {
 
 export function logout(): void {
   window.localStorage.removeItem(AUTH_KEY);
+  window.localStorage.removeItem("token");
 }

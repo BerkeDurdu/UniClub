@@ -3,12 +3,9 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import Button from "../common/Button";
 import type { ClubCreatePayload, ClubLocalProfile } from "../../types";
+import { clubSchema } from "../../validation/schemas";
 
-const clubSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  description: z.string().min(1, "Description is required"),
-  category: z.string().min(1, "Category is required"),
-  founded_date: z.string().min(1, "Founded date is required"),
+const clubFormSchema = clubSchema.extend({
   contact_email: z.string().email("Valid contact email is required"),
   contact_phone: z.string().optional(),
   communication_channel: z.string().optional(),
@@ -31,7 +28,7 @@ const clubSchema = z.object({
   sponsor_contact_role: z.string().optional(),
 });
 
-type ClubFormValues = z.infer<typeof clubSchema>;
+type ClubFormValues = z.infer<typeof clubFormSchema>;
 
 export interface ClubFormSubmitPayload {
   createPayload: ClubCreatePayload;
@@ -50,7 +47,7 @@ function ClubForm({ onSubmit, onCancel, isSubmitting }: ClubFormProps) {
     handleSubmit,
     formState: { errors },
   } = useForm<ClubFormValues>({
-    resolver: zodResolver(clubSchema),
+    resolver: zodResolver(clubFormSchema),
     defaultValues: {
       name: "",
       description: "",

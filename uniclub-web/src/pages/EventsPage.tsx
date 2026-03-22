@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { getClubs } from "../api/services/clubService";
 import { createEvent, getEvents } from "../api/services/eventService";
@@ -26,10 +26,9 @@ function EventsPage() {
   const queryClient = useQueryClient();
 
   const eventsQuery = useQuery({
-    queryKey: ["events", debouncedSearch, status, page],
+    queryKey: ["events", status, page],
     queryFn: () =>
       getEvents({
-        search: debouncedSearch || undefined,
         status: status || undefined,
         sort_by: "event_start",
         skip: page * PAGE_SIZE,
@@ -37,8 +36,24 @@ function EventsPage() {
       }),
   });
 
+  // Client-side title search since backend events endpoint doesn't support search
+  const filteredEvents = useMemo(() => {
+    const events = eventsQuery.data ?? [];
+    if (!debouncedSearch) return events;
+    const lower = debouncedSearch.toLowerCase();
+    return events.filter((event) => event.title.toLowerCase().includes(lower));
+  }, [eventsQuery.data, debouncedSearch]);
+
   const clubsQuery = useQuery({ queryKey: ["club-options"], queryFn: () => getClubs({ limit: 200 }) });
   const venuesQuery = useQuery({ queryKey: ["venue-options"], queryFn: getVenues });
+
+  const clubMap = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const club of clubsQuery.data ?? []) {
+      map.set(club.id, club.name);
+    }
+    return map;
+  }, [clubsQuery.data]);
 
   const createEventMutation = useMutation({
     mutationFn: (payload: EventCreatePayload) => createEvent(payload),
@@ -95,7 +110,7 @@ function EventsPage() {
             </Button>
             <Button
               variant="ghost"
-              disabled={(eventsQuery.data ?? []).length < PAGE_SIZE}
+              disabled={filteredEvents.length < PAGE_SIZE}
               onClick={() => setPage((prev) => prev + 1)}
             >
               Next
@@ -114,21 +129,24 @@ function EventsPage() {
         </div>
       ) : null}
 
-      {eventsQuery.data && eventsQuery.data.length === 0 ? (
+      {eventsQuery.data && filteredEvents.length === 0 ? (
         <EmptyState
           title="No Results Found"
           description="No events matched the selected filters."
         />
       ) : null}
 
-      {eventsQuery.data && eventsQuery.data.length > 0 ? (
+      {filteredEvents.length > 0 ? (
         <div className="space-y-3">
-          {eventsQuery.data.map((event) => (
+          {filteredEvents.map((event) => (
             <Card key={event.id} className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="headline text-lg font-semibold text-ink">{event.title}</h3>
                 <p className="text-sm text-slate">
                   {new Date(event.event_start).toLocaleString()} - {new Date(event.event_end).toLocaleString()}
+                </p>
+                <p className="text-xs text-slate">
+                  Club: {clubMap.get(event.club_id) ?? `#${event.club_id}`}
                 </p>
               </div>
               <div className="flex items-center gap-3">

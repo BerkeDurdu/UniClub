@@ -13,126 +13,113 @@ It provides a single dashboard for clubs, events, members, registrations, and sp
 - TanStack React Query
 - React Hot Toast
 
-## Features
+## Pages and Routes
 
-- Client-side routing (Dashboard, Clubs, Events, Members, and detail pages)
-- Auth pages with validation:
-  - `/auth/login`
-  - `/auth/register`
-- Route protection for dashboard pages
-- Mock auth service (integration-ready replacement point)
-- Reusable editable UI components:
-  - `EditableField`
-  - `AddItemBox`
-- Event Details safety guards for invalid/missing IDs
-- Caching and sync with React Query
-- Global error handling (Axios interceptor + ErrorBoundary)
-- Footer API health indicator (polls every 30 seconds)
-- Skeleton loading and empty state UI
+| Page | URL | Description |
+|------|-----|-------------|
+| Dashboard | `/dashboard` | Health check, stats overview, event capacity pulse |
+| Clubs | `/clubs` | List, search, filter, create clubs |
+| Club Detail | `/clubs/:id` | Club profile, advisor, members, board, events, messages |
+| Events | `/events` | List, filter by status, create events |
+| Event Detail | `/events/:id` | Event info, budget, registrations, participants, sponsorships |
+| Members | `/members` | Member participation analytics |
+| Advisors | `/advisors` | List, search, create advisors |
+| Board Members | `/board-members` | List, filter by role/club, create board members |
+| Venues | `/venues` | List and create venues |
+| Budgets | `/budgets` | Budget tracking per event |
+| Registrations | `/registrations` | Event registration management |
+| Sponsorships | `/sponsorships` | Sponsorship tracking |
+| Messages | `/messages` | Club message management |
+| Login | `/auth/login` | Email/password login |
+| Register | `/auth/register` | Account creation |
+| 404 | `*` | Not found page |
 
-## Prompt 7 Additions
+## API Integration Summary
 
-### Authentication Flow
+### Backend Endpoints Used
 
-- Login form fields: email, password
-- Register form fields: full name, email, password, confirm password
-- Validation:
-  - valid email format
-  - password minimum length = 8
-  - confirm password must match
-- Success and error toasts are shown for login/register actions
-- Redirect behavior:
-  - On successful auth, users are redirected to `/dashboard`
-  - Protected routes redirect unauthenticated users to `/auth/login`
+| Frontend Service | Backend Endpoints |
+|-----------------|-------------------|
+| clubService | `GET /clubs`, `GET /clubs/:id`, `POST /clubs`, `DELETE /clubs/:id` |
+| advisorService | `GET /advisors`, `GET /advisors/:id`, `POST /advisors` |
+| memberService | `GET /members`, `GET /members/:id`, `POST /members` |
+| boardMemberService | `GET /board-members`, `GET /board-members/:id`, `POST /board-members` |
+| venueService | `GET /venues`, `GET /venues/:id`, `POST /venues` |
+| eventService | `GET /events`, `GET /events/:id`, `POST /events`, `PUT /events/:id`, `DELETE /events/:id` |
+| budgetService | `GET /budgets/:eventId`, `POST /budgets`, `PUT /budgets/:eventId` |
+| registrationService | `GET /registrations`, `POST /registrations` |
+| participantService | `GET /events/:eventId/participants`, `POST /participants` |
+| messageService | `GET /messages`, `GET /clubs/:clubId/messages`, `POST /messages` |
+| sponsorshipService | `GET /sponsorships`, `GET /events/:eventId/sponsorships`, `POST /sponsorships` |
+| reportService | `GET /reports/club-network/:clubId`, `GET /reports/event-network/:eventId`, `GET /reports/member-network/:memberId` |
+| Health checks | `GET /health`, `GET /health/db` |
 
-### Mock Auth Behavior
+### Query Parameters
 
-Current auth is implemented as a local mock in `src/api/services/authService.ts`.
+- **Clubs**: `category`, `search`, `skip`, `limit`
+- **Events**: `status`, `club_id`, `venue_id`, `upcoming_only`, `sort_by`, `skip`, `limit`
+- **Members**: `department`, `club_id`, `search`, `skip`, `limit`
+- **Registrations**: `event_id`, `member_id`
+- **Participants**: `linked_member_only`
 
-- Registered users are stored in `localStorage`
-- Active session is stored in `localStorage`
-- Logout clears session data
-- Includes a TODO in code to replace with backend endpoints later
+## Configuring Backend URL
 
-## Editable/Addable Components
+Set the `VITE_API_BASE_URL` environment variable to point to your backend:
 
-Reusable components:
+1. Copy `.env.example` to `.env`
+2. Edit the value:
 
-- `EditableField`:
-  - inline edit mode
-  - save/cancel controls
-  - simple non-empty validation
-- `AddItemBox`:
-  - add new text items
-  - optional custom validation callback
+```env
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
 
-Integrated usage:
+The default value (when not set) is `http://127.0.0.1:8000`.
 
-- Clubs page:
-  - editable local category and description fields per club card
-  - addable local category tag box
-- Event Details page:
-  - editable local event note block
-  - addable local metadata labels
+## Authentication Flow
 
-## Event Details Stability Notes
+The frontend uses a **mock authentication** system stored in `localStorage`:
 
-To prevent crashes when opening `Events -> View details`, the page now includes:
+1. User registers via `/auth/register` (full name, email, password)
+2. User logs in via `/auth/login` (email, password)
+3. On successful login/register, session data and a mock token are stored in `localStorage`
+4. The API client's request interceptor reads the token from `localStorage` and attaches it as a `Bearer` token in the `Authorization` header on all API requests
+5. `ProtectedRoute` component checks authentication state and redirects unauthenticated users to `/auth/login`
+6. Logout clears session data and token from `localStorage`
 
-- Strict route parameter validation (`id` must be a positive integer)
-- Query `enabled` guards for ID-dependent fetches
-- Null-safe fallbacks for all list/data sections
-- Friendly error rendering for invalid IDs and missing events
-- Mutation error handling with toasts to avoid unhandled async flow
+**Note**: The backend currently has no auth endpoints. The mock auth flow works without crashes and is ready to be replaced with real backend authentication when available.
 
-## Prompt 8 Additions
+## Cross-Entity Name Resolution
 
-### Club Management Fields
+Pages display human-readable names instead of raw IDs:
 
-Club create flow now collects sponsor-ready communication fields:
+- **Events page**: Shows club name for each event
+- **Budget page**: Shows event title for each budget row
+- **Registration page**: Shows member name and event title
+- **Sponsorship page**: Shows event title
+- **Messages page**: Shows club name and member name
+- **Board Members page**: Shows club name
+- **Advisors page**: Shows club name
+- **Club Detail page**: Uses report endpoint for full club network (advisor, members, board, events, messages)
+- **Event Detail page**: Uses report endpoint for full event network (venue, budget, registrations, participants, sponsorships)
 
-- `contact_email` (required)
-- `contact_phone` (optional)
-- `communication_channel` (optional)
-- `social_link` (optional URL)
-- `sponsor_contact_name` (optional)
-- `sponsor_contact_role` (optional)
+## Error Handling
 
-Backend note:
+- **ErrorBoundary** component wraps the entire app to catch rendering errors
+- **API client interceptor** shows toast notifications for 400, 404, 409, 422, and 500+ errors
+- **422 validation errors** are parsed into field-level messages via `parseValidationErrors()`
+- **404 on detail pages** shows a "not found" state instead of crashing
+- **Network errors** (backend unreachable) show user-friendly toast messages
+- **Health indicator** in the footer polls `/health` every 30 seconds
+- **Dashboard** shows backend API and database connection status
 
-- Current backend club schema does not yet persist these fields.
-- Frontend uses local fallback persistence in `src/api/services/clubProfileService.ts`.
-- There is an explicit TODO in code to move these fields to backend API once supported.
+## Known Limitations / TODO
 
-### Club Detail Editable Management
-
-Club Detail now includes editable sections for:
-
-- Club Profile: category, description, founded date
-- Club Communication: contact email/phone/channel/social link
-- Sponsor Communication: contact person and role
-
-All edits are save/cancel driven and toast-supported. Failed save actions do not crash the UI.
-
-### Sponsor Communication Block
-
-Sponsor Communication block includes:
-
-- Primary contact person and role
-- Contact email, phone, preferred channel
-- Quick copy buttons for email/phone/channel
-- Empty state when no sponsor contact info exists
-
-### Members Analytics Redesign
-
-Members page now focuses on active event participation instead of a full noisy member list:
-
-- Active Participants metric
-- Average Events per Active Member
-- Top Participants panel
-- Period filter: Last 30 days / This semester / All time
-- Sort options: event count or name
-- Limited list by default, optional toggle to show all active members
+- Authentication is mock-only (localStorage). Replace with backend JWT auth when endpoints are available.
+- Club communication fields (contact email, phone, channel, social link, sponsor contact) are stored in localStorage only. Move to backend when club schema supports them.
+- Events backend does not support a `search` query parameter; event search is done client-side.
+- No pagination on advisors, board members, venues, messages, or sponsorships list endpoints (backend returns all).
+- No update/delete endpoints for advisors, members, board members, venues, registrations, participants, messages, or sponsorships.
+- Bundle size is above 500 KB; consider code splitting for production.
 
 ## Project Structure
 
@@ -140,25 +127,18 @@ Members page now focuses on active event participation instead of a full noisy m
 uniclub-web/
   src/
     api/
-      client.ts
-      services/
+      client.ts          # Axios instance with interceptors
+      errors.ts          # Error parsing utilities
+      services/          # One service per entity
     components/
-      common/
-      feedback/
-      forms/
-      layout/
-    hooks/
-    pages/
-    types/
-```
-
-## Environment Variables
-
-1. Copy `.env.example` to `.env`.
-2. Verify backend URL.
-
-```env
-VITE_API_BASE_URL=http://127.0.0.1:8000
+      common/            # Button, Card, Badge, Modal, etc.
+      feedback/          # ErrorBoundary
+      forms/             # Form components per entity
+      layout/            # AppLayout, ProtectedRoute, HealthIndicator
+    hooks/               # React Query hooks per entity
+    pages/               # Page components
+    types/               # TypeScript interfaces
+    validation/          # Zod schemas
 ```
 
 ## Run Frontend
@@ -183,37 +163,10 @@ Backend endpoints:
 - `http://127.0.0.1:8000/health`
 - `http://127.0.0.1:8000/docs`
 
-## Troubleshooting
-
-### Event detail shows an error message
-
-- Confirm backend is running.
-- Check the event ID in URL is valid (positive integer).
-- If event does not exist, the UI will show `Event not found.` instead of crashing.
-
-### Login fails
-
-- Ensure account exists in mock auth store.
-- Register first, then log in with the same email/password.
-
-### API is offline in footer
-
-- Verify `VITE_API_BASE_URL` in `.env`.
-- Confirm backend health endpoint returns `200`.
-
-## Screenshots
-
-Replace these placeholders with real screenshots from the running app:
-
-- `./screenshots/screenshot-1.png`
-- `./screenshots/screenshot-2.png`
-- `./screenshots/screenshot-3.png`
-- `./screenshots/screenshot-4.png`
-
 ## Build
 
 ```bash
 npm run build
 ```
 
-This runs TypeScript checks and creates a production bundle.
+This runs TypeScript checks and creates a production bundle in `dist/`.

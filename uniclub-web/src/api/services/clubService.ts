@@ -22,3 +22,7 @@ export async function createClub(payload: ClubCreatePayload): Promise<Club> {
   const response = await apiClient.post<Club>("/clubs", payload);
   return response.data;
 }
+
+export async function deleteClub(id: number): Promise<void> {
+  await apiClient.delete(`/clubs/${id}`);
+}

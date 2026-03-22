@@ -6,9 +6,12 @@ export interface RegistrationPayload {
   member_id: number;
 }
 
-export async function getRegistrations(eventId?: number): Promise<Registration[]> {
+export async function getRegistrations(eventId?: number, memberId?: number): Promise<Registration[]> {
+  const params: Record<string, number> = {};
+  if (eventId !== undefined) params.event_id = eventId;
+  if (memberId !== undefined) params.member_id = memberId;
   const response = await apiClient.get<Registration[]>("/registrations", {
-    params: eventId ? { event_id: eventId } : undefined,
+    params: Object.keys(params).length > 0 ? params : undefined,
   });
   return response.data;
 }

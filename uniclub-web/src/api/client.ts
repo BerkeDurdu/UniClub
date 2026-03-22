@@ -9,6 +9,14 @@ export const apiClient = axios.create({
   timeout: 10_000,
 });
 
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -21,6 +29,8 @@ apiClient.interceptors.response.use(
 
     if (status && [400, 404, 409, 422].includes(status)) {
       toast.error(message);
+    } else if (status && status >= 500) {
+      toast.error("A server error occurred. Please try again later.");
     }
 
     console.error("API error:", error);

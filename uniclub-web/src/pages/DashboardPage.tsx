@@ -2,12 +2,43 @@ import { useQuery } from "@tanstack/react-query";
 import Card from "../components/common/Card";
 import ErrorMessage from "../components/common/ErrorMessage";
 import SkeletonCard from "../components/common/SkeletonCard";
+import { apiClient } from "../api/client";
 import { getClubs } from "../api/services/clubService";
 import { getEvents } from "../api/services/eventService";
 import { getMembers } from "../api/services/memberService";
 import { getVenues } from "../api/services/venueService";
 
+interface HealthResponse {
+  status: string;
+  app_version?: string;
+  environment?: string;
+}
+
+interface DbHealthResponse {
+  status: string;
+  database?: string;
+  message?: string;
+}
+
 function DashboardPage() {
+  const healthQuery = useQuery({
+    queryKey: ["health"],
+    queryFn: async () => {
+      const response = await apiClient.get<HealthResponse>("/health");
+      return response.data;
+    },
+    retry: false,
+  });
+
+  const dbHealthQuery = useQuery({
+    queryKey: ["health", "db"],
+    queryFn: async () => {
+      const response = await apiClient.get<DbHealthResponse>("/health/db");
+      return response.data;
+    },
+    retry: false,
+  });
+
   const clubsQuery = useQuery({ queryKey: ["dashboard", "clubs"], queryFn: () => getClubs({ limit: 500 }) });
   const eventsQuery = useQuery({ queryKey: ["dashboard", "events"], queryFn: () => getEvents({ limit: 500 }) });
   const membersQuery = useQuery({ queryKey: ["dashboard", "members"], queryFn: () => getMembers({ limit: 500 }) });
@@ -61,12 +92,41 @@ function DashboardPage() {
     };
   });
 
+  const apiConnected = healthQuery.isSuccess && healthQuery.data?.status === "ok";
+  const dbConnected = dbHealthQuery.isSuccess && dbHealthQuery.data?.status === "ok";
+
   return (
     <section className="space-y-6">
       <div>
         <h2 className="headline text-3xl font-bold text-ink">Dashboard</h2>
         <p className="mt-1 text-slate">Track the live status of the UniClub ecosystem.</p>
       </div>
+
+      <Card>
+        <h3 className="headline text-lg font-semibold text-ink">Backend Status</h3>
+        <div className="mt-3 flex flex-wrap gap-4">
+          <div className="flex items-center gap-2">
+            <span className={`h-2.5 w-2.5 rounded-full ${apiConnected ? "bg-green-500" : "bg-red-500"}`} />
+            <span className="text-sm text-slate">
+              API: {healthQuery.isLoading ? "checking..." : apiConnected ? "connected" : "disconnected"}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`h-2.5 w-2.5 rounded-full ${dbConnected ? "bg-green-500" : "bg-red-500"}`} />
+            <span className="text-sm text-slate">
+              Database: {dbHealthQuery.isLoading ? "checking..." : dbConnected ? "connected" : "disconnected"}
+            </span>
+          </div>
+          {healthQuery.isSuccess && healthQuery.data?.app_version ? (
+            <span className="text-sm text-slate">v{healthQuery.data.app_version}</span>
+          ) : null}
+        </div>
+        {healthQuery.isError ? (
+          <p className="mt-2 text-sm text-red-600">
+            Backend is unreachable. Make sure the API server is running.
+          </p>
+        ) : null}
+      </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>

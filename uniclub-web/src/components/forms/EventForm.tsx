@@ -1,30 +1,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 import type { Club, EventCreatePayload, EventStatus, Venue } from "../../types";
 import Button from "../common/Button";
-
-const eventSchema = z
-  .object({
-    title: z.string().min(1, "Title is required"),
-    description: z.string().min(1, "Description is required"),
-    status: z.enum(["Scheduled", "Completed", "Canceled"]),
-    event_start: z.string().min(1, "Event start is required"),
-    event_end: z.string().min(1, "Event end is required"),
-    club_id: z.number().int().positive(),
-    venue_id: z.number().int().positive().optional(),
-  })
-  .superRefine((value, ctx) => {
-    if (new Date(value.event_end) <= new Date(value.event_start)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["event_end"],
-        message: "event_end must be after event_start",
-      });
-    }
-  });
-
-type EventFormValues = z.infer<typeof eventSchema>;
+import { eventSchema, type EventFormValues } from "../../validation/schemas";
 
 interface EventFormProps {
   clubs: Club[];
@@ -32,6 +10,7 @@ interface EventFormProps {
   onSubmit: (payload: EventCreatePayload) => Promise<void>;
   onCancel: () => void;
   isSubmitting: boolean;
+  initialValues?: Partial<EventFormValues>;
 }
 
 const statusOptions: EventStatus[] = ["Scheduled", "Completed", "Canceled"];
@@ -42,8 +21,10 @@ function EventForm({
   onSubmit,
   onCancel,
   isSubmitting,
+  initialValues,
 }: EventFormProps) {
-  const defaultClubId = clubs[0]?.id;
+  const defaultClubId = initialValues?.club_id ?? clubs[0]?.id;
+  const isEditing = !!initialValues;
 
   const {
     register,
@@ -52,12 +33,13 @@ function EventForm({
   } = useForm<EventFormValues>({
     resolver: zodResolver(eventSchema),
     defaultValues: {
-      title: "",
-      description: "",
-      status: "Scheduled",
-      event_start: "",
-      event_end: "",
+      title: initialValues?.title ?? "",
+      description: initialValues?.description ?? "",
+      status: initialValues?.status ?? "Scheduled",
+      event_start: initialValues?.event_start ?? "",
+      event_end: initialValues?.event_end ?? "",
       club_id: defaultClubId,
+      venue_id: initialValues?.venue_id,
     },
   });
 
@@ -151,7 +133,7 @@ function EventForm({
           Cancel
         </Button>
         <Button type="submit" variant="secondary" isLoading={isSubmitting}>
-          Create Event
+          {isEditing ? "Update Event" : "Create Event"}
         </Button>
       </div>
     </form>
