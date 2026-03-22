@@ -1,6 +1,7 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
+from typing import Optional
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -15,6 +16,12 @@ class Settings(BaseSettings):
     debug: bool = True
     secret_key: str = Field(..., min_length=1)
     access_token_expire_minutes: int = 1440
+    seed_member_email: str = "member@uniclub.com"
+    seed_advisor_email: str = "advisor@uniclub.com"
+    seed_board_email: str = "board@uniclub.com"
+    seed_member_password: Optional[str] = None
+    seed_advisor_password: Optional[str] = None
+    seed_board_password: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",

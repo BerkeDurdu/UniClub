@@ -324,11 +324,11 @@ Update `config.py` to load `SECRET_KEY` and `ACCESS_TOKEN_EXPIRE_MINUTES` from e
 
 Update the seed logic in main.py to create exactly three test user accounts:
 
-| Role | Email | Password | Linked To |
-|------|-------|----------|-----------|
-| member | member@uniclub.com | member123 | First seeded Member record |
-| advisor | advisor@uniclub.com | advisor123 | First seeded Advisor record |
-| board_member | board@uniclub.com | board123 | First seeded BoardMember record |
+| Role | Email Source | Password Source | Linked To |
+|------|--------------|-----------------|-----------|
+| member | environment variable | environment variable | First seeded Member record |
+| advisor | environment variable | environment variable | First seeded Advisor record |
+| board_member | environment variable | environment variable | First seeded BoardMember record |
 
 Requirements:
 - All passwords must be hashed with bcrypt before insertion

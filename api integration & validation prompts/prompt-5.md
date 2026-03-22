@@ -18,9 +18,9 @@ SETUP CONTEXT (for clean installs)
 - Application auth users are stored in `app_user` table.
 - If models changed and DB is empty/misaligned, run backend startup sync once so tables and seed users are created.
 - Seed expectation after successful startup sync:
-  - member@uniclub.com / member123
-  - advisor@uniclub.com / advisor123
-  - board@uniclub.com / board123
+  - member account email from environment
+  - advisor account email from environment
+  - board account email from environment
 
 REGISTER BUTTON PITFALL (must be prevented)
 - The register submit must not fail silently due to hidden-field validation.

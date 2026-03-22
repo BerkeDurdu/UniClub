@@ -73,6 +73,14 @@ for router in all_routers:
     app.include_router(router)
 
 
+def resolve_seed_password(seed_key: str, role_label: str) -> str:
+    configured = getattr(settings, seed_key, None)
+    if isinstance(configured, str) and configured.strip():
+        return configured.strip()
+    # Deterministic fallback avoids hardcoded plaintext credentials in repository files.
+    return f"{role_label}-{settings.secret_key[:12]}-Seed!"
+
+
 def seed_data():
     """
     Idempotent seed logic to populate starter data easily.
@@ -162,6 +170,8 @@ def seed_data():
                     existing_user.club_id = club_id
                 if existing_user.full_name != full_name:
                     existing_user.full_name = full_name
+                # Keep seeded demo users on current secure baseline password policy.
+                existing_user.hashed_password = hash_password(password)
                 session.add(existing_user)
                 session.commit()
                 session.refresh(existing_user)
@@ -197,23 +207,27 @@ def seed_data():
                     return raced_user
                 raise
 
+        member_seed_password = resolve_seed_password("seed_member_password", "member")
+        advisor_seed_password = resolve_seed_password("seed_advisor_password", "advisor")
+        board_seed_password = resolve_seed_password("seed_board_password", "board")
+
         member_user = ensure_test_user(
-            email="member@uniclub.com",
-            password="member123",
+            email=settings.seed_member_email,
+            password=member_seed_password,
             full_name=f"{first_member.first_name} {first_member.last_name}".strip(),
             role=UserRole.member,
             club_id=first_member.club_id if first_member.club_id is not None else 1,
         )
         advisor_user = ensure_test_user(
-            email="advisor@uniclub.com",
-            password="advisor123",
+            email=settings.seed_advisor_email,
+            password=advisor_seed_password,
             full_name=first_advisor.full_name,
             role=UserRole.advisor,
             club_id=first_advisor.club_id if first_advisor.club_id is not None else 1,
         )
         board_user = ensure_test_user(
-            email="board@uniclub.com",
-            password="board123",
+            email=settings.seed_board_email,
+            password=board_seed_password,
             full_name=f"{first_board_member.first_name} {first_board_member.last_name}".strip(),
             role=UserRole.board_member,
             club_id=first_board_member.club_id,
@@ -239,7 +253,7 @@ def seed_data():
                 continue
             linked_user = ensure_test_user(
                 email=advisor.email,
-                password="advisor123",
+                password=advisor_seed_password,
                 full_name=advisor.full_name,
                 role=UserRole.advisor,
                 club_id=advisor.club_id,
@@ -253,7 +267,7 @@ def seed_data():
                 continue
             linked_user = ensure_test_user(
                 email=board_member.email,
-                password="board123",
+                password=board_seed_password,
                 full_name=f"{board_member.first_name} {board_member.last_name}".strip(),
                 role=UserRole.board_member,
                 club_id=board_member.club_id,

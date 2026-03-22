@@ -52,6 +52,21 @@ uvicorn main:app --reload
 - Redoc: `http://127.0.0.1:8000/redoc`
 - Health check: `http://127.0.0.1:8000/health/db`
 
+## Seed Demo Accounts
+
+Seed account emails and passwords are configurable via environment variables and should not be committed in plaintext.
+
+Recommended variables:
+
+- `SEED_MEMBER_EMAIL`
+- `SEED_ADVISOR_EMAIL`
+- `SEED_BOARD_EMAIL`
+- `SEED_MEMBER_PASSWORD`
+- `SEED_ADVISOR_PASSWORD`
+- `SEED_BOARD_PASSWORD`
+
+If seed passwords are not provided, backend generates deterministic fallback values from `SECRET_KEY` at startup.
+
 ## Auth Storage Diagnostics
 
 - `postgres` in `DATABASE_URL` is only the PostgreSQL connection account.
@@ -114,3 +129,4 @@ Replace placeholders with real captures before final submission.
 - GitHub URL: `<ADD_REPOSITORY_URL_HERE>`
 - Presentation file: `<ADD_PRESENTATION_FILE_NAME.pdf_or_pptx>`
 - Screenshot location: repository root `screenshots/`
+- Repository report file: `REPORT.md` (must be present at repository root)
