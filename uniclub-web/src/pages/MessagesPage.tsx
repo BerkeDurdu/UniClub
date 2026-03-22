@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getClubs } from "../api/services/clubService";
-import { getMembers } from "../api/services/memberService";
 import { useMessages, useCreateMessage } from "../hooks/useMessages";
 import type { MessageCreatePayload } from "../types";
 import Button from "../components/common/Button";
@@ -17,7 +16,6 @@ function MessagesPage() {
 
   const messagesQuery = useMessages();
   const clubsQuery = useQuery({ queryKey: ["clubs"], queryFn: () => getClubs({ limit: 200 }) });
-  const membersQuery = useQuery({ queryKey: ["members"], queryFn: () => getMembers({ limit: 500 }) });
   const createMutation = useCreateMessage();
 
   const clubMap = useMemo(() => {
@@ -27,14 +25,6 @@ function MessagesPage() {
     }
     return map;
   }, [clubsQuery.data]);
-
-  const memberMap = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const m of membersQuery.data ?? []) {
-      map.set(m.id, `${m.first_name} ${m.last_name}`);
-    }
-    return map;
-  }, [membersQuery.data]);
 
   const handleCreate = async (payload: MessageCreatePayload) => {
     await createMutation.mutateAsync(payload);
@@ -87,7 +77,14 @@ function MessagesPage() {
               </div>
               <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate">
                 <span>Club: {clubMap.get(msg.club_id) ?? `#${msg.club_id}`}</span>
-                <span>From: {memberMap.get(msg.member_id) ?? `Member #${msg.member_id}`}</span>
+                <span>
+                  From: {msg.sender_name ?? `User #${msg.sender_user_id}`}
+                  {msg.sender_role ? ` (${msg.sender_role})` : ""}
+                </span>
+                <span>
+                  To: {msg.receiver_name ?? `User #${msg.receiver_user_id}`}
+                  {msg.receiver_role ? ` (${msg.receiver_role})` : ""}
+                </span>
               </div>
             </Card>
           ))}

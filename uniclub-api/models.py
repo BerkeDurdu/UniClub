@@ -4,6 +4,11 @@ import enum
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Index, CheckConstraint, text, Column, Enum, UniqueConstraint
 
+class UserRole(str, enum.Enum):
+    member = "member"
+    advisor = "advisor"
+    board_member = "board_member"
+
 class EventStatus(str, enum.Enum):
     Scheduled = "Scheduled"
     Completed = "Completed"
@@ -16,11 +21,22 @@ class BoardRole(str, enum.Enum):
     Treasurer = "Treasurer"
     Coordinator = "Coordinator"
 
-class Club(SQLModel, table=True):
+class User(SQLModel, table=True):
+    __tablename__ = "app_user"
     __table_args__ = (
-        # Frequently queried column index
-        Index("ix_club_name", "name"),
+        CheckConstraint("length(trim(full_name)) > 0", name="ck_user_full_name_non_empty"),
+        CheckConstraint("(role = 'member') OR (club_id IS NOT NULL)", name="ck_user_role_requires_club"),
     )
+    id: Optional[int] = Field(default=None, primary_key=True)
+    email: str = Field(unique=True, index=True)
+    hashed_password: str
+    full_name: str
+    role: UserRole = Field(sa_column=Column(Enum(UserRole)))
+    club_id: Optional[int] = Field(default=None, foreign_key="club.id")
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.now)
+
+class Club(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
     description: str
@@ -35,8 +51,6 @@ class Club(SQLModel, table=True):
 
 class Advisor(SQLModel, table=True):
     __table_args__ = (
-        # Frequently queried
-        Index("ix_advisor_email", "email"),
         # Only one advisor assignment per club (Partial Unique Index)
         Index("ix_advisor_one_per_club", "club_id", unique=True, postgresql_where=text("club_id IS NOT NULL")),
     )
@@ -49,11 +63,10 @@ class Advisor(SQLModel, table=True):
     club_id: Optional[int] = Field(default=None, foreign_key="club.id")
     club: Optional[Club] = Relationship(back_populates="advisor")
 
+    user_id: Optional[int] = Field(default=None, foreign_key="app_user.id", unique=True)
+
 class Member(SQLModel, table=True):
     __table_args__ = (
-        # Frequently queried
-        Index("ix_member_email", "email"),
-        Index("ix_member_student_id", "student_id"),
         CheckConstraint("leave_date IS NULL OR leave_date >= join_date", name="ck_member_leave_date"),
     )
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -67,8 +80,9 @@ class Member(SQLModel, table=True):
     
     club_id: Optional[int] = Field(default=None, foreign_key="club.id")
     club: Optional[Club] = Relationship(back_populates="members")
-    
-    messages: List["Message"] = Relationship(back_populates="member")
+
+    user_id: Optional[int] = Field(default=None, foreign_key="app_user.id", unique=True)
+
     registrations: List["Registration"] = Relationship(back_populates="member")
     participants: List["Participant"] = Relationship(back_populates="member")
 
@@ -91,6 +105,8 @@ class BoardMember(SQLModel, table=True):
     
     club_id: int = Field(foreign_key="club.id")
     club: Club = Relationship(back_populates="board_members")
+
+    user_id: Optional[int] = Field(default=None, foreign_key="app_user.id", unique=True)
 
 class Venue(SQLModel, table=True):
     __table_args__ = (
@@ -141,9 +157,12 @@ class Message(SQLModel, table=True):
     
     club_id: int = Field(foreign_key="club.id")
     club: Club = Relationship(back_populates="messages")
-    
-    member_id: int = Field(foreign_key="member.id")
-    member: Member = Relationship(back_populates="messages")
+
+    sender_user_id: int = Field(foreign_key="app_user.id")
+    receiver_user_id: int = Field(foreign_key="app_user.id")
+
+    # Legacy column retained to keep compatibility with existing databases.
+    member_id: Optional[int] = Field(default=None, foreign_key="member.id")
 
 class Registration(SQLModel, table=True):
     __table_args__ = (

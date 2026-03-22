@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+import { getCurrentUser } from "../api/services/authService";
+import { canPerformAction, isMember, isSameClub, isStaffRole } from "../auth/permissions";
 import { getClubs } from "../api/services/clubService";
 import { useAdvisors, useCreateAdvisor } from "../hooks/useAdvisors";
 import type { AdvisorCreatePayload } from "../types";
@@ -13,6 +16,10 @@ import AdvisorForm from "../components/forms/AdvisorForm";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 
 function AdvisorsPage() {
+  const currentUser = getCurrentUser();
+  const role = currentUser?.role;
+  const userClubId = currentUser?.clubId;
+  const canCreateAdvisor = canPerformAction(role, "create_advisor");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
@@ -29,6 +36,14 @@ function AdvisorsPage() {
     }
     return map;
   }, [clubsQuery.data]);
+
+  const selectableClubs = useMemo(() => {
+    const clubs = clubsQuery.data ?? [];
+    if (!isStaffRole(role)) {
+      return clubs;
+    }
+    return clubs.filter((club) => isSameClub(userClubId, club.id));
+  }, [clubsQuery.data, role, userClubId]);
 
   const departments = useMemo(() => {
     const set = new Set<string>();
@@ -56,6 +71,14 @@ function AdvisorsPage() {
   }, [advisorsQuery.data, debouncedSearch, departmentFilter]);
 
   const handleCreate = async (payload: AdvisorCreatePayload) => {
+    if (!canCreateAdvisor) {
+      toast.error("You do not have permission to add advisors.");
+      return;
+    }
+    if (isStaffRole(role) && !isSameClub(userClubId, payload.club_id ?? undefined)) {
+      toast.error("You can only manage your own club resources.");
+      return;
+    }
     await createAdvisorMutation.mutateAsync(payload);
     setIsFormOpen(false);
   };
@@ -66,10 +89,13 @@ function AdvisorsPage() {
         <div>
           <h2 className="headline text-3xl font-bold text-ink">Advisors</h2>
           <p className="mt-1 text-slate">Manage faculty advisors assigned to clubs.</p>
+          {isMember(role) ? <p className="mt-2 text-xs text-slate">Read-only for member role.</p> : null}
         </div>
-        <Button variant="secondary" onClick={() => setIsFormOpen(true)}>
-          Add Advisor
-        </Button>
+        {canCreateAdvisor ? (
+          <Button variant="secondary" onClick={() => setIsFormOpen(true)}>
+            Add Advisor
+          </Button>
+        ) : null}
       </div>
 
       <Card className="space-y-3">
@@ -144,13 +170,16 @@ function AdvisorsPage() {
         </Card>
       ) : null}
 
-      <Modal title="Add Advisor" isOpen={isFormOpen} onClose={() => setIsFormOpen(false)}>
-        <AdvisorForm
-          onSubmit={handleCreate}
-          onCancel={() => setIsFormOpen(false)}
-          isSubmitting={createAdvisorMutation.isPending}
-        />
-      </Modal>
+      {canCreateAdvisor ? (
+        <Modal title="Add Advisor" isOpen={isFormOpen} onClose={() => setIsFormOpen(false)}>
+          <AdvisorForm
+            clubs={selectableClubs}
+            onSubmit={handleCreate}
+            onCancel={() => setIsFormOpen(false)}
+            isSubmitting={createAdvisorMutation.isPending}
+          />
+        </Modal>
+      ) : null}
     </section>
   );
 }

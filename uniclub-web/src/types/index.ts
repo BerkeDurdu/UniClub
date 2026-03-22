@@ -7,6 +7,18 @@ export type BoardRole =
   | "Treasurer"
   | "Coordinator";
 
+export type UserRole = "member" | "advisor" | "board_member";
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  clubId: number | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export interface Club {
   id: number;
   name: string;
@@ -99,8 +111,20 @@ export interface Message {
   subject: string;
   content: string;
   club_id: number;
-  member_id: number;
+  sender_user_id: number;
+  receiver_user_id: number;
   sent_at: string;
+  sender_name: string | null;
+  sender_role: UserRole | null;
+  receiver_name: string | null;
+  receiver_role: UserRole | null;
+}
+
+export interface MessageRecipientOption {
+  id: number;
+  full_name: string;
+  role: UserRole;
+  club_id: number | null;
 }
 
 export interface Sponsorship {
@@ -123,6 +147,20 @@ export interface ClubLocalProfile {
   category?: string;
   founded_date?: string;
   contact_email?: string;
+  contact_phone?: string;
+  communication_channel?: string;
+  social_link?: string;
+  sponsor_contact_name?: string;
+  sponsor_contact_role?: string;
+}
+
+export interface ManualClubOnboardingDraft {
+  club_id: number;
+  club_name: string;
+  category: string;
+  description: string;
+  founded_date: string;
+  contact_email: string;
   contact_phone?: string;
   communication_channel?: string;
   social_link?: string;
@@ -264,7 +302,7 @@ export interface MessageCreatePayload {
   subject: string;
   content: string;
   club_id: number;
-  member_id: number;
+  receiver_user_id: number;
   sent_at?: string;
 }
 

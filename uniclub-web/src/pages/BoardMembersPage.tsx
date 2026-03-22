@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+import { getCurrentUser } from "../api/services/authService";
+import { canViewSection, isSameClub, isStaffRole } from "../auth/permissions";
 import { getClubs } from "../api/services/clubService";
 import { useBoardMembers, useCreateBoardMember } from "../hooks/useBoardMembers";
 import type { BoardMemberCreatePayload, BoardRole } from "../types";
@@ -21,6 +24,10 @@ const ROLES: ("" | BoardRole)[] = [
 ];
 
 function BoardMembersPage() {
+  const currentUser = getCurrentUser();
+  const role = currentUser?.role;
+  const userClubId = currentUser?.clubId;
+  const canManageBoard = canViewSection(role, "board_manage");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [roleFilter, setRoleFilter] = useState<"" | BoardRole>("");
   const [clubFilter, setClubFilter] = useState<number | "">("");
@@ -36,6 +43,14 @@ function BoardMembersPage() {
     }
     return map;
   }, [clubsQuery.data]);
+
+  const selectableClubs = useMemo(() => {
+    const clubs = clubsQuery.data ?? [];
+    if (!isStaffRole(role)) {
+      return clubs;
+    }
+    return clubs.filter((club) => isSameClub(userClubId, club.id));
+  }, [clubsQuery.data, role, userClubId]);
 
   const filtered = useMemo(() => {
     let result = boardMembersQuery.data ?? [];
@@ -57,6 +72,14 @@ function BoardMembersPage() {
   };
 
   const handleCreate = async (payload: BoardMemberCreatePayload) => {
+    if (!canManageBoard) {
+      toast.error("You do not have permission to manage board members.");
+      return;
+    }
+    if (isStaffRole(role) && !isSameClub(userClubId, payload.club_id)) {
+      toast.error("You can only manage your own club resources.");
+      return;
+    }
     await createMutation.mutateAsync(payload);
     setIsFormOpen(false);
   };
@@ -68,9 +91,11 @@ function BoardMembersPage() {
           <h2 className="headline text-3xl font-bold text-ink">Board Members</h2>
           <p className="mt-1 text-slate">View and manage club board members.</p>
         </div>
-        <Button variant="secondary" onClick={() => setIsFormOpen(true)}>
-          Add Board Member
-        </Button>
+        {canManageBoard ? (
+          <Button variant="secondary" onClick={() => setIsFormOpen(true)}>
+            Add Board Member
+          </Button>
+        ) : null}
       </div>
 
       <Card className="space-y-3">
@@ -159,13 +184,16 @@ function BoardMembersPage() {
         </Card>
       ) : null}
 
-      <Modal title="Add Board Member" isOpen={isFormOpen} onClose={() => setIsFormOpen(false)}>
-        <BoardMemberForm
-          onSubmit={handleCreate}
-          onCancel={() => setIsFormOpen(false)}
-          isSubmitting={createMutation.isPending}
-        />
-      </Modal>
+      {canManageBoard ? (
+        <Modal title="Add Board Member" isOpen={isFormOpen} onClose={() => setIsFormOpen(false)}>
+          <BoardMemberForm
+            clubs={selectableClubs}
+            onSubmit={handleCreate}
+            onCancel={() => setIsFormOpen(false)}
+            isSubmitting={createMutation.isPending}
+          />
+        </Modal>
+      ) : null}
     </section>
   );
 }

@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 import { getEvents } from "../api/services/eventService";
+import { getCurrentUser } from "../api/services/authService";
+import { canPerformAction, isSameClub, isStaffRole } from "../auth/permissions";
 import { useCreateBudget } from "../hooks/useBudgets";
 import type { BudgetCreatePayload, Event } from "../types";
 import Button from "../components/common/Button";
@@ -18,11 +21,12 @@ import BudgetForm from "../components/forms/BudgetForm";
  * the /events endpoint and a bulk approach via Promise.allSettled.
  */
 
-import { getBudgetByEvent } from "../api/services/budgetService";
+import { getBudgetByEventOptional } from "../api/services/budgetService";
 
 interface BudgetRow {
   eventId: number;
   eventTitle: string;
+  isOwnClub: boolean;
   planned_amount: number;
   actual_amount: number;
   notes: string | null;
@@ -30,6 +34,10 @@ interface BudgetRow {
 }
 
 function BudgetsPage() {
+  const currentUser = getCurrentUser();
+  const role = currentUser?.role;
+  const userClubId = currentUser?.clubId;
+  const canCreateBudget = canPerformAction(role, "create_budget");
   const [isFormOpen, setIsFormOpen] = useState(false);
 
   const eventsQuery = useQuery({
@@ -42,16 +50,18 @@ function BudgetsPage() {
     queryFn: async () => {
       const events: Event[] = eventsQuery.data ?? [];
       const results = await Promise.allSettled(
-        events.map((event) => getBudgetByEvent(event.id))
+        events.map((event) => getBudgetByEventOptional(event.id))
       );
       const rows: BudgetRow[] = [];
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
-        if (result.status === "fulfilled") {
+        if (result.status === "fulfilled" && result.value) {
           const budget = result.value;
+          const isOwnClub = !isStaffRole(role) || isSameClub(userClubId, events[i].club_id);
           rows.push({
             eventId: events[i].id,
             eventTitle: events[i].title,
+            isOwnClub,
             planned_amount: budget.planned_amount,
             actual_amount: budget.actual_amount,
             notes: budget.notes,
@@ -67,8 +77,24 @@ function BudgetsPage() {
   const createMutation = useCreateBudget();
 
   const rows = useMemo(() => budgetsQuery.data ?? [], [budgetsQuery.data]);
+  const selectableEvents = useMemo(() => {
+    const events = eventsQuery.data ?? [];
+    if (!isStaffRole(role)) {
+      return events;
+    }
+    return events.filter((event) => isSameClub(userClubId, event.club_id));
+  }, [eventsQuery.data, role, userClubId]);
 
   const handleCreate = async (payload: BudgetCreatePayload) => {
+    if (!canCreateBudget) {
+      toast.error("You do not have permission to create budgets.");
+      return;
+    }
+    const selectedEvent = selectableEvents.find((event) => event.id === payload.event_id);
+    if (!selectedEvent) {
+      toast.error("You can only manage your own club resources.");
+      return;
+    }
     await createMutation.mutateAsync(payload);
     setIsFormOpen(false);
   };
@@ -83,9 +109,11 @@ function BudgetsPage() {
           <h2 className="headline text-3xl font-bold text-ink">Budgets</h2>
           <p className="mt-1 text-slate">Track event budgets and spending.</p>
         </div>
-        <Button variant="secondary" onClick={() => setIsFormOpen(true)}>
-          Add Budget
-        </Button>
+        {canCreateBudget ? (
+          <Button variant="secondary" onClick={() => setIsFormOpen(true)}>
+            Add Budget
+          </Button>
+        ) : null}
       </div>
 
       {isError ? <ErrorMessage message="Could not load budget data." /> : null}
@@ -123,21 +151,25 @@ function BudgetsPage() {
                   <tr key={row.eventId} className="border-b border-slate/10">
                     <td className="px-2 py-2 font-medium text-ink">{row.eventTitle}</td>
                     <td className="px-2 py-2 text-slate">
-                      ${row.planned_amount.toLocaleString()}
+                      {row.isOwnClub ? `$${row.planned_amount.toLocaleString()}` : "Restricted"}
                     </td>
                     <td className="px-2 py-2 text-slate">
-                      ${row.actual_amount.toLocaleString()}
+                      {row.isOwnClub ? `$${row.actual_amount.toLocaleString()}` : "Restricted"}
                     </td>
                     <td className="px-2 py-2">
-                      <span
-                        className={`font-semibold ${
-                          row.variance >= 0 ? "text-green-600" : "text-red-600"
-                        }`}
-                      >
-                        {row.variance >= 0 ? "+" : ""}${row.variance.toLocaleString()}
-                      </span>
+                      {row.isOwnClub ? (
+                        <span
+                          className={`font-semibold ${
+                            row.variance >= 0 ? "text-green-600" : "text-red-600"
+                          }`}
+                        >
+                          {row.variance >= 0 ? "+" : ""}${row.variance.toLocaleString()}
+                        </span>
+                      ) : (
+                        <span className="text-slate">Restricted</span>
+                      )}
                     </td>
-                    <td className="px-2 py-2 text-slate">{row.notes || "-"}</td>
+                    <td className="px-2 py-2 text-slate">{row.isOwnClub ? row.notes || "-" : "Restricted"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -146,13 +178,16 @@ function BudgetsPage() {
         </Card>
       ) : null}
 
-      <Modal title="Add Budget" isOpen={isFormOpen} onClose={() => setIsFormOpen(false)}>
-        <BudgetForm
-          onSubmit={handleCreate}
-          onCancel={() => setIsFormOpen(false)}
-          isSubmitting={createMutation.isPending}
-        />
-      </Modal>
+      {canCreateBudget ? (
+        <Modal title="Add Budget" isOpen={isFormOpen} onClose={() => setIsFormOpen(false)}>
+          <BudgetForm
+            events={selectableEvents}
+            onSubmit={handleCreate}
+            onCancel={() => setIsFormOpen(false)}
+            isSubmitting={createMutation.isPending}
+          />
+        </Modal>
+      ) : null}
     </section>
   );
 }

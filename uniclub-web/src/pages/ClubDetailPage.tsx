@@ -2,8 +2,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { getCurrentUser } from "../api/services/authService";
 import { getClubLocalProfile, upsertClubLocalProfile } from "../api/services/clubProfileService";
 import { deleteClub } from "../api/services/clubService";
+import { canManageClubResource, canPerformAction, isMember, isStaffRole } from "../auth/permissions";
 import { useClubNetwork } from "../hooks/useReports";
 import Button from "../components/common/Button";
 import Card from "../components/common/Card";
@@ -13,12 +15,16 @@ import LoadingSpinner from "../components/common/LoadingSpinner";
 import type { ClubLocalProfile } from "../types";
 
 function ClubDetailPage() {
+  const currentUser = getCurrentUser();
+  const role = currentUser?.role;
+  const userClubId = currentUser?.clubId;
   const params = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const parsedClubId = Number.parseInt(params.id ?? "", 10);
   const isValidClubId = Number.isInteger(parsedClubId) && parsedClubId > 0;
   const clubId = isValidClubId ? parsedClubId : 0;
+  const canManageClub = canPerformAction(role, "update_club") && canManageClubResource(role, userClubId, clubId);
   const [profileRevision, setProfileRevision] = useState(0);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -92,9 +98,13 @@ function ClubDetailPage() {
             <p className="mt-1 text-sm text-slate">
               Founded Date: {new Date(foundedDateValue).toLocaleDateString()}
             </p>
+            {isMember(role) ? <p className="mt-2 text-xs text-slate">Read-only for member role.</p> : null}
+            {isStaffRole(role) && !canManageClub ? (
+              <p className="mt-2 text-xs text-slate">You can only manage your own club resources.</p>
+            ) : null}
           </div>
           <div className="flex gap-2">
-            {showDeleteConfirm ? (
+            {canManageClub && showDeleteConfirm ? (
               <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
                 <span className="text-sm text-red-700">Confirm delete?</span>
                 <Button
@@ -109,7 +119,7 @@ function ClubDetailPage() {
                   Cancel
                 </Button>
               </div>
-            ) : (
+            ) : canManageClub ? (
               <Button
                 variant="ghost"
                 className="!border-red-300 !text-red-700"
@@ -117,7 +127,7 @@ function ClubDetailPage() {
               >
                 Delete Club
               </Button>
-            )}
+            ) : null}
           </div>
         </div>
       </Card>
@@ -147,16 +157,26 @@ function ClubDetailPage() {
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <EditableField
             label="Category"
+            canEdit={canManageClub}
             value={categoryValue}
             onSave={async (nextValue) => {
+              if (!canManageClub) {
+                toast.error("You can only manage your own club resources.");
+                return;
+              }
               saveLocal({ category: nextValue });
               toast.success("Category saved locally.");
             }}
           />
           <EditableField
             label="Founded Date (YYYY-MM-DD)"
+            canEdit={canManageClub}
             value={foundedDateValue}
             onSave={async (nextValue) => {
+              if (!canManageClub) {
+                toast.error("You can only manage your own club resources.");
+                return;
+              }
               saveLocal({ founded_date: nextValue });
               toast.success("Founded date saved locally.");
             }}
@@ -165,8 +185,13 @@ function ClubDetailPage() {
             <EditableField
               label="Description"
               multiline
+              canEdit={canManageClub}
               value={descriptionValue}
               onSave={async (nextValue) => {
+                if (!canManageClub) {
+                  toast.error("You can only manage your own club resources.");
+                  return;
+                }
                 saveLocal({ description: nextValue });
                 toast.success("Description saved locally.");
               }}
@@ -180,36 +205,56 @@ function ClubDetailPage() {
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <EditableField
             label="Contact Email"
+            canEdit={canManageClub}
             value={localProfile.contact_email ?? ""}
             placeholder="No contact email"
             onSave={async (nextValue) => {
+              if (!canManageClub) {
+                toast.error("You can only manage your own club resources.");
+                return;
+              }
               saveLocal({ contact_email: nextValue });
               toast.success("Contact email saved locally.");
             }}
           />
           <EditableField
             label="Contact Phone"
+            canEdit={canManageClub}
             value={localProfile.contact_phone ?? ""}
             placeholder="No contact phone"
             onSave={async (nextValue) => {
+              if (!canManageClub) {
+                toast.error("You can only manage your own club resources.");
+                return;
+              }
               saveLocal({ contact_phone: nextValue });
               toast.success("Contact phone saved locally.");
             }}
           />
           <EditableField
             label="Preferred Channel"
+            canEdit={canManageClub}
             value={localProfile.communication_channel ?? ""}
             placeholder="No preferred channel"
             onSave={async (nextValue) => {
+              if (!canManageClub) {
+                toast.error("You can only manage your own club resources.");
+                return;
+              }
               saveLocal({ communication_channel: nextValue });
               toast.success("Preferred channel saved locally.");
             }}
           />
           <EditableField
             label="Social Link"
+            canEdit={canManageClub}
             value={localProfile.social_link ?? ""}
             placeholder="No social link"
             onSave={async (nextValue) => {
+              if (!canManageClub) {
+                toast.error("You can only manage your own club resources.");
+                return;
+              }
               saveLocal({ social_link: nextValue });
               toast.success("Social link saved locally.");
             }}
@@ -228,18 +273,28 @@ function ClubDetailPage() {
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <EditableField
             label="Primary Contact Person"
+            canEdit={canManageClub}
             value={localProfile.sponsor_contact_name ?? ""}
             placeholder="Not set"
             onSave={async (nextValue) => {
+              if (!canManageClub) {
+                toast.error("You can only manage your own club resources.");
+                return;
+              }
               saveLocal({ sponsor_contact_name: nextValue });
               toast.success("Sponsor contact person saved locally.");
             }}
           />
           <EditableField
             label="Primary Contact Role"
+            canEdit={canManageClub}
             value={localProfile.sponsor_contact_role ?? ""}
             placeholder="Not set"
             onSave={async (nextValue) => {
+              if (!canManageClub) {
+                toast.error("You can only manage your own club resources.");
+                return;
+              }
               saveLocal({ sponsor_contact_role: nextValue });
               toast.success("Sponsor contact role saved locally.");
             }}
@@ -330,7 +385,7 @@ function ClubDetailPage() {
         <ul className="mt-2 space-y-2 text-sm text-slate">
           {messages.slice(0, 5).map((message) => (
             <li key={message.id}>
-              {message.subject} • member #{message.member_id}
+              {message.subject} • {message.sender_name ?? `user #${message.sender_user_id}`}
             </li>
           ))}
         </ul>

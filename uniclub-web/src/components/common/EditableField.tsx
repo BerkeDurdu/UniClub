@@ -8,6 +8,7 @@ interface EditableFieldProps {
   onSave: (nextValue: string) => Promise<void> | void;
   placeholder?: string;
   multiline?: boolean;
+  canEdit?: boolean;
 }
 
 function EditableField({
@@ -16,6 +17,7 @@ function EditableField({
   onSave,
   placeholder = "Enter value",
   multiline = false,
+  canEdit = true,
 }: EditableFieldProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [draftValue, setDraftValue] = useState(value);
@@ -52,7 +54,7 @@ function EditableField({
     <div className="space-y-2 rounded-xl border border-slate/20 bg-white/60 p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate">{label}</p>
-        {isEditing ? null : (
+        {isEditing || !canEdit ? null : (
           <Button variant="ghost" className="px-3 py-1 text-xs" onClick={startEdit}>
             Edit
           </Button>

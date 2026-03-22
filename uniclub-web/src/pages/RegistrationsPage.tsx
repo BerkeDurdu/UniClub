@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+import { getCurrentUser } from "../api/services/authService";
+import { canViewSection, isSameClub, isStaffRole } from "../auth/permissions";
 import { getEvents } from "../api/services/eventService";
 import { getMembers } from "../api/services/memberService";
 import { useRegistrations, useRegisterForEvent } from "../hooks/useRegistrations";
@@ -13,6 +16,10 @@ import Modal from "../components/common/Modal";
 import RegistrationForm from "../components/forms/RegistrationForm";
 
 function RegistrationsPage() {
+  const currentUser = getCurrentUser();
+  const role = currentUser?.role;
+  const userClubId = currentUser?.clubId;
+  const canManageRegistrations = canViewSection(role, "registrations_manage");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [eventFilter, setEventFilter] = useState<number | "">("");
 
@@ -26,6 +33,32 @@ function RegistrationsPage() {
     queryFn: () => getMembers({ limit: 500 }),
   });
   const registerMutation = useRegisterForEvent();
+
+  const selectableEvents = useMemo(() => {
+    const events = eventsQuery.data ?? [];
+    if (!isStaffRole(role)) {
+      return events;
+    }
+    return events.filter((event) => isSameClub(userClubId, event.club_id));
+  }, [eventsQuery.data, role, userClubId]);
+
+  const selectableEventIds = useMemo(
+    () => new Set(selectableEvents.map((event) => event.id)),
+    [selectableEvents]
+  );
+
+  const selectableMembers = useMemo(() => {
+    const members = membersQuery.data ?? [];
+    if (!isStaffRole(role)) {
+      return members;
+    }
+    return members.filter((member) => isSameClub(userClubId, member.club_id ?? undefined));
+  }, [membersQuery.data, role, userClubId]);
+
+  const selectableMemberIds = useMemo(
+    () => new Set(selectableMembers.map((member) => member.id)),
+    [selectableMembers]
+  );
 
   const eventMap = useMemo(() => {
     const map = new Map<number, string>();
@@ -44,6 +77,14 @@ function RegistrationsPage() {
   }, [membersQuery.data]);
 
   const handleCreate = async (payload: RegistrationCreatePayload) => {
+    if (!canManageRegistrations) {
+      toast.error("You do not have permission to manage registrations.");
+      return;
+    }
+    if (!selectableEventIds.has(payload.event_id) || !selectableMemberIds.has(payload.member_id)) {
+      toast.error("You can only manage your own club resources.");
+      return;
+    }
     await registerMutation.mutateAsync({
       event_id: payload.event_id,
       member_id: payload.member_id,
@@ -60,9 +101,11 @@ function RegistrationsPage() {
           <h2 className="headline text-3xl font-bold text-ink">Registrations</h2>
           <p className="mt-1 text-slate">View and manage event registrations.</p>
         </div>
-        <Button variant="secondary" onClick={() => setIsFormOpen(true)}>
-          Register
-        </Button>
+        {canManageRegistrations ? (
+          <Button variant="secondary" onClick={() => setIsFormOpen(true)}>
+            Register
+          </Button>
+        ) : null}
       </div>
 
       <Card className="space-y-3">
@@ -134,13 +177,17 @@ function RegistrationsPage() {
         </Card>
       ) : null}
 
-      <Modal title="Register for Event" isOpen={isFormOpen} onClose={() => setIsFormOpen(false)}>
-        <RegistrationForm
-          onSubmit={handleCreate}
-          onCancel={() => setIsFormOpen(false)}
-          isSubmitting={registerMutation.isPending}
-        />
-      </Modal>
+      {canManageRegistrations ? (
+        <Modal title="Register for Event" isOpen={isFormOpen} onClose={() => setIsFormOpen(false)}>
+          <RegistrationForm
+            events={selectableEvents}
+            members={selectableMembers}
+            onSubmit={handleCreate}
+            onCancel={() => setIsFormOpen(false)}
+            isSubmitting={registerMutation.isPending}
+          />
+        </Modal>
+      ) : null}
     </section>
   );
 }

@@ -2,8 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { getCurrentUser } from "../api/services/authService";
 import { getClubs } from "../api/services/clubService";
 import { createEvent, getEvents } from "../api/services/eventService";
+import { canPerformAction, isMember, isSameClub, isStaffRole } from "../auth/permissions";
 import { getVenues } from "../api/services/venueService";
 import Badge from "../components/common/Badge";
 import Button from "../components/common/Button";
@@ -18,6 +20,10 @@ import type { EventCreatePayload, EventStatus } from "../types";
 const PAGE_SIZE = 6;
 
 function EventsPage() {
+  const currentUser = getCurrentUser();
+  const role = currentUser?.role;
+  const userClubId = currentUser?.clubId;
+  const canCreateEvent = canPerformAction(role, "create_event");
   const [searchInput, setSearchInput] = useState("");
   const [status, setStatus] = useState<"" | EventStatus>("");
   const [page, setPage] = useState(0);
@@ -55,6 +61,14 @@ function EventsPage() {
     return map;
   }, [clubsQuery.data]);
 
+  const selectableClubs = useMemo(() => {
+    const clubs = clubsQuery.data ?? [];
+    if (!isStaffRole(role)) {
+      return clubs;
+    }
+    return clubs.filter((club) => isSameClub(userClubId, club.id));
+  }, [clubsQuery.data, role, userClubId]);
+
   const createEventMutation = useMutation({
     mutationFn: (payload: EventCreatePayload) => createEvent(payload),
     onSuccess: async () => {
@@ -70,10 +84,13 @@ function EventsPage() {
         <div>
           <h2 className="headline text-3xl font-bold text-ink">Events</h2>
           <p className="mt-1 text-slate">Explore events, apply filters, and create new ones quickly.</p>
+          {isMember(role) ? <p className="mt-2 text-xs text-slate">Read-only for member role.</p> : null}
         </div>
-        <Button variant="secondary" onClick={() => setIsFormOpen(true)}>
-          Create Event
-        </Button>
+        {canCreateEvent ? (
+          <Button variant="secondary" onClick={() => setIsFormOpen(true)}>
+            Create Event
+          </Button>
+        ) : null}
       </div>
 
       <Card className="space-y-3">
@@ -160,14 +177,22 @@ function EventsPage() {
         </div>
       ) : null}
 
-      {isFormOpen ? (
+      {isFormOpen && canCreateEvent ? (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4">
           <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
             <h3 className="headline mb-4 text-2xl font-semibold text-ink">Create Event</h3>
             <EventForm
-              clubs={clubsQuery.data ?? []}
+              clubs={selectableClubs}
               venues={venuesQuery.data ?? []}
               onSubmit={async (payload) => {
+                if (!canCreateEvent) {
+                  toast.error("You do not have permission to create events.");
+                  return;
+                }
+                if (isStaffRole(role) && !isSameClub(userClubId, payload.club_id)) {
+                  toast.error("You can only manage your own club resources.");
+                  return;
+                }
                 await createEventMutation.mutateAsync(payload);
               }}
               onCancel={() => setIsFormOpen(false)}

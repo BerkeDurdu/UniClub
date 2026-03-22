@@ -52,6 +52,29 @@ uvicorn main:app --reload
 - Redoc: `http://127.0.0.1:8000/redoc`
 - Health check: `http://127.0.0.1:8000/health/db`
 
+## Auth Storage Diagnostics
+
+- `postgres` in `DATABASE_URL` is only the PostgreSQL connection account.
+- Application login accounts are stored as rows in `app_user` table.
+- Passwords are stored as bcrypt hashes in `app_user.hashed_password`.
+
+Safe SQL checks (no plaintext exposure):
+
+```sql
+-- Count application users
+SELECT COUNT(*) AS user_count FROM app_user;
+
+-- List non-sensitive account fields
+SELECT email, role, club_id, is_active FROM app_user ORDER BY id;
+
+-- Verify hash is present and not plaintext-like
+SELECT
+	email,
+	LENGTH(hashed_password) AS hash_len,
+	CASE WHEN hashed_password LIKE '$2%' THEN 'bcrypt' ELSE 'unexpected' END AS hash_format
+FROM app_user;
+```
+
 [Screenshot place folder here for future reference]
 
 ## Database Relationship Proof

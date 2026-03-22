@@ -2,7 +2,7 @@ from sqlmodel import Session, select, or_
 from fastapi import HTTPException
 from models import (
     Club, Advisor, Member, BoardMember, Venue, Event, Message,
-    Registration, Sponsorship, Budget, Participant, EventStatus, BoardRole
+    Registration, Sponsorship, Budget, Participant, EventStatus, BoardRole, User, UserRole
 )
 from schemas import (
     ClubCreate, ClubUpdate, AdvisorCreate, MemberCreate, MemberUpdateLeaveDate,
@@ -452,19 +452,42 @@ class ParticipantService:
 
 class MessageService:
     @staticmethod
-    def create_message(session: Session, data: MessageCreate) -> Message:
+    def create_message(session: Session, data: MessageCreate, sender_user: User) -> Message:
         if not data.subject.strip() or not data.content.strip():
             raise HTTPException(status_code=400, detail="Message subject and content cannot be blank")
+
+        if sender_user.club_id is None:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        if sender_user.club_id != data.club_id:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+
         club = session.get(Club, data.club_id)
         if not club:
             raise HTTPException(status_code=404, detail="Club not found")
-        member = session.get(Member, data.member_id)
-        if not member:
-            raise HTTPException(status_code=404, detail="Member not found")
-        if member.club_id != data.club_id:
-            raise HTTPException(status_code=400, detail="Member cannot post messages into a club they do not belong to")
+
+        receiver = session.get(User, data.receiver_user_id)
+        if not receiver:
+            raise HTTPException(status_code=404, detail="Recipient user not found")
+        if receiver.id == sender_user.id:
+            raise HTTPException(status_code=400, detail="You cannot send messages to yourself")
+        if receiver.club_id != data.club_id:
+            raise HTTPException(status_code=400, detail="Recipient must belong to the selected club")
+
+        sender_role = sender_user.role if isinstance(sender_user.role, UserRole) else UserRole(sender_user.role)
+        receiver_role = receiver.role if isinstance(receiver.role, UserRole) else UserRole(receiver.role)
+
+        if sender_role == UserRole.member:
+            if receiver_role not in {UserRole.advisor, UserRole.board_member}:
+                raise HTTPException(status_code=403, detail="Members can only message advisors or board members")
+        elif sender_role in {UserRole.advisor, UserRole.board_member}:
+            if receiver_role not in {UserRole.advisor, UserRole.board_member}:
+                raise HTTPException(status_code=403, detail="Advisors and board members can only message advisors or board members")
+        else:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
 
         db_obj = Message(**data.model_dump(exclude={"sent_at"}))
+        db_obj.sender_user_id = sender_user.id
+        db_obj.member_id = None
         db_obj.sent_at = data.sent_at or datetime.now()
         session.add(db_obj)
         session.commit()
@@ -485,6 +508,43 @@ class MessageService:
     @staticmethod
     def list_messages_by_club(session: Session, club_id: int) -> list[Message]:
         return session.exec(select(Message).where(Message.club_id == club_id)).all()
+
+    @staticmethod
+    def serialize_message(session: Session, msg: Message) -> dict:
+        sender = session.get(User, msg.sender_user_id)
+        receiver = session.get(User, msg.receiver_user_id)
+        return {
+            "id": msg.id,
+            "subject": msg.subject,
+            "content": msg.content,
+            "club_id": msg.club_id,
+            "sender_user_id": msg.sender_user_id,
+            "receiver_user_id": msg.receiver_user_id,
+            "sent_at": msg.sent_at,
+            "sender_name": sender.full_name if sender else None,
+            "sender_role": sender.role if sender else None,
+            "receiver_name": receiver.full_name if receiver else None,
+            "receiver_role": receiver.role if receiver else None,
+        }
+
+    @staticmethod
+    def recipient_options(session: Session, current_user: User) -> list[User]:
+        current_role = current_user.role if isinstance(current_user.role, UserRole) else UserRole(current_user.role)
+        if current_user.club_id is None:
+            return []
+
+        query = select(User).where(
+            User.club_id == current_user.club_id,
+            User.is_active == True,
+            User.id != current_user.id,
+        )
+
+        if current_role in {UserRole.member, UserRole.advisor, UserRole.board_member}:
+            query = query.where(User.role.in_([UserRole.advisor, UserRole.board_member]))
+        else:
+            return []
+
+        return session.exec(query).all()
 
 
 class SponsorshipService:
@@ -572,7 +632,14 @@ class ReportService:
     def get_member_network(session: Session, member_id: int) -> dict:
         member = MemberService.get_member(session, member_id)
         club = session.get(Club, member.club_id) if member.club_id else None
-        messages = session.exec(select(Message).where(Message.member_id == member_id)).all()
+        if member.user_id:
+            messages = session.exec(
+                select(Message).where(
+                    (Message.sender_user_id == member.user_id) | (Message.receiver_user_id == member.user_id)
+                )
+            ).all()
+        else:
+            messages = []
         registrations = session.exec(select(Registration).where(Registration.member_id == member_id)).all()
         participant_records = session.exec(select(Participant).where(Participant.member_id == member_id)).all()
 

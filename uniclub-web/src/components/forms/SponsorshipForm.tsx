@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { sponsorshipSchema, type SponsorshipFormValues } from "../../validation/schemas";
 import { getEvents } from "../../api/services/eventService";
-import type { SponsorshipCreatePayload } from "../../types";
+import type { Event, SponsorshipCreatePayload } from "../../types";
 import FormField from "./FormField";
 import Button from "../common/Button";
 
@@ -11,13 +11,16 @@ interface SponsorshipFormProps {
   onSubmit: (payload: SponsorshipCreatePayload) => Promise<void>;
   onCancel: () => void;
   isSubmitting: boolean;
+  events?: Event[];
 }
 
-function SponsorshipForm({ onSubmit, onCancel, isSubmitting }: SponsorshipFormProps) {
-  const { data: events = [] } = useQuery({
+function SponsorshipForm({ onSubmit, onCancel, isSubmitting, events: providedEvents }: SponsorshipFormProps) {
+  const { data: queriedEvents = [] } = useQuery({
     queryKey: ["events"],
     queryFn: () => getEvents(),
+    enabled: !providedEvents,
   });
+  const events = providedEvents ?? queriedEvents;
 
   const {
     register,

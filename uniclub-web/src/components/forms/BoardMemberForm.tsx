@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { boardMemberSchema, type BoardMemberFormValues } from "../../validation/schemas";
 import { getClubs } from "../../api/services/clubService";
-import type { BoardMemberCreatePayload, BoardRole } from "../../types";
+import type { BoardMemberCreatePayload, BoardRole, Club } from "../../types";
 import FormField from "./FormField";
 import Button from "../common/Button";
 
@@ -11,6 +11,7 @@ interface BoardMemberFormProps {
   onSubmit: (payload: BoardMemberCreatePayload) => Promise<void>;
   onCancel: () => void;
   isSubmitting: boolean;
+  clubs?: Club[];
 }
 
 const roleOptions: BoardRole[] = [
@@ -21,11 +22,13 @@ const roleOptions: BoardRole[] = [
   "Coordinator",
 ];
 
-function BoardMemberForm({ onSubmit, onCancel, isSubmitting }: BoardMemberFormProps) {
-  const { data: clubs = [] } = useQuery({
+function BoardMemberForm({ onSubmit, onCancel, isSubmitting, clubs: providedClubs }: BoardMemberFormProps) {
+  const { data: queriedClubs = [] } = useQuery({
     queryKey: ["clubs"],
     queryFn: () => getClubs(),
+    enabled: !providedClubs,
   });
+  const clubs = providedClubs ?? queriedClubs;
 
   const {
     register,

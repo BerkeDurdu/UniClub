@@ -4,6 +4,7 @@ import {
   getAllMessages,
   getMessagesByClub,
   createMessage,
+  getMessageRecipientOptions,
 } from "../api/services/messageService";
 import type { MessageCreatePayload } from "../types";
 
@@ -19,6 +20,13 @@ export function useMessagesByClub(clubId: number) {
     queryKey: ["messages", "club", clubId],
     queryFn: () => getMessagesByClub(clubId),
     enabled: clubId > 0,
+  });
+}
+
+export function useMessageRecipientOptions() {
+  return useQuery({
+    queryKey: ["messages", "recipient-options"],
+    queryFn: getMessageRecipientOptions,
   });
 }
 

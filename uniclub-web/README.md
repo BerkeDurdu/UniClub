@@ -52,6 +52,7 @@ It provides a single dashboard for clubs, events, members, registrations, and sp
 | messageService | `GET /messages`, `GET /clubs/:clubId/messages`, `POST /messages` |
 | sponsorshipService | `GET /sponsorships`, `GET /events/:eventId/sponsorships`, `POST /sponsorships` |
 | reportService | `GET /reports/club-network/:clubId`, `GET /reports/event-network/:eventId`, `GET /reports/member-network/:memberId` |
+| authService | `POST /auth/register`, `POST /auth/login`, `GET /auth/me` |
 | Health checks | `GET /health`, `GET /health/db` |
 
 ### Query Parameters
@@ -77,16 +78,91 @@ The default value (when not set) is `http://127.0.0.1:8000`.
 
 ## Authentication Flow
 
-The frontend uses a **mock authentication** system stored in `localStorage`:
+The frontend uses backend JWT authentication via FastAPI auth endpoints:
 
-1. User registers via `/auth/register` (full name, email, password)
-2. User logs in via `/auth/login` (email, password)
-3. On successful login/register, session data and a mock token are stored in `localStorage`
-4. The API client's request interceptor reads the token from `localStorage` and attaches it as a `Bearer` token in the `Authorization` header on all API requests
-5. `ProtectedRoute` component checks authentication state and redirects unauthenticated users to `/auth/login`
-6. Logout clears session data and token from `localStorage`
+1. User registers via `/auth/register` with:
+  - `full_name`, `email`, `password`, `role`, and role-dependent `club_id`
+2. Role-aware register rules:
+  - `member`: `club_id` optional
+  - `advisor` and `board_member`: `club_id` required
+3. User logs in via `/auth/login` (email, password)
+4. On successful register/login, frontend stores:
+  - `token` in `localStorage`
+  - normalized user session in `localStorage`
+5. API client request interceptor sends `Authorization: Bearer <token>` on all requests
+6. `ProtectedRoute` redirects unauthenticated users to `/auth/login`
+7. Logout clears token and user session keys
 
-**Note**: The backend currently has no auth endpoints. The mock auth flow works without crashes and is ready to be replaced with real backend authentication when available.
+### Manual club registration flow (advisor/board_member)
+
+- Advisor and board member can choose club input mode:
+  - select existing club
+  - enter club manually
+- In manual mode, additional club fields are collected during registration.
+- Backend receives manual club data, creates/reuses the club, and returns `club_id`.
+- Frontend redirects user to `/onboarding/club` after successful manual-mode registration.
+- On onboarding completion, club communication/sponsor fields are persisted in local fallback profile and user is redirected to `/dashboard`.
+
+`/auth/me` can be used to refresh or validate the current user session from backend.
+
+## Frontend Authorization (Role-Based UI)
+
+Frontend includes a role-based UI authorization layer on top of backend authorization.
+
+- Source of truth for role in UI: authenticated session (`member`, `advisor`, `board_member`)
+- Backend remains final authority; frontend checks are UX + safety guards
+
+### Member restrictions
+
+- Member users do not see management controls such as:
+  - `Create Club`
+  - club detail edit controls
+  - event detail registration controls for other members
+  - external participant creation controls
+  - event metadata edit controls
+  - advisor creation controls
+  - venue creation controls
+  - quick tag/metadata tag add controls
+- Member users do not see management-oriented navigation entries:
+  - Board
+  - Budgets
+  - Sponsorships
+  - Registrations
+
+### Member event registration rule
+
+- Member users can register only themselves to an event.
+- Member users cannot select another member and cannot register on behalf of others.
+
+### Member financial visibility rule
+
+- Member users can see sponsor names.
+- Member users cannot see sponsorship amount values.
+- Member users cannot see budget amount details (planned/actual/variance).
+
+### Route guard behavior
+
+- Restricted pages are guarded at route level.
+- If a member opens a restricted URL directly, app redirects to `/dashboard` and shows:
+  - `You do not have permission to access this page.`
+
+### Client-side mutation safety
+
+- Mutation handlers perform permission checks before API calls.
+- Unauthorized action attempts are blocked client-side with user-friendly toasts.
+
+### Advisor / board_member own-club scope (Prompt 13)
+
+- Advisor and board_member users can manage only resources that belong to their own `club_id`.
+- Cross-club create/edit attempts are blocked in UI before API call.
+- Scoped pages for staff include own-club filtering in lists and form selectors:
+  - clubs
+  - events
+  - budgets
+  - sponsorships
+  - registrations
+  - advisors
+  - board members
 
 ## Cross-Entity Name Resolution
 
@@ -114,7 +190,7 @@ Pages display human-readable names instead of raw IDs:
 
 ## Known Limitations / TODO
 
-- Authentication is mock-only (localStorage). Replace with backend JWT auth when endpoints are available.
+- Auth session currently relies on localStorage token/session persistence in the browser.
 - Club communication fields (contact email, phone, channel, social link, sponsor contact) are stored in localStorage only. Move to backend when club schema supports them.
 - Events backend does not support a `search` query parameter; event search is done client-side.
 - No pagination on advisors, board members, venues, messages, or sponsorships list endpoints (backend returns all).

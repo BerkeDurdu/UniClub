@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { getClubLocalProfile, upsertClubLocalProfile } from "../api/services/clubProfileService";
 import { createClub, getClubs } from "../api/services/clubService";
+import { getCurrentUser } from "../api/services/authService";
+import { canManageClubResource, canPerformAction, isMember } from "../auth/permissions";
 import Button from "../components/common/Button";
 import AddItemBox from "../components/common/AddItemBox";
 import Card from "../components/common/Card";
@@ -18,6 +20,12 @@ import type { ClubCreatePayload } from "../types";
 const PAGE_SIZE = 6;
 
 function ClubsPage() {
+  const currentUser = getCurrentUser();
+  const role = currentUser?.role;
+  const userClubId = currentUser?.clubId;
+  const canCreateClub = canPerformAction(role, "create_club");
+  const canUpdateClub = canPerformAction(role, "update_club");
+  const canAddQuickTag = canPerformAction(role, "add_quick_tag");
   const [searchInput, setSearchInput] = useState("");
   const [category, setCategory] = useState<string>("");
   const [page, setPage] = useState(0);
@@ -48,6 +56,11 @@ function ClubsPage() {
   });
 
   const handleCreateClub = async (payload: ClubFormSubmitPayload) => {
+    if (!canCreateClub) {
+      toast.error("You do not have permission to create clubs.");
+      return;
+    }
+
     const created = await createClubMutation.mutateAsync(payload.createPayload);
 
     // TODO: Move these profile fields to backend once club schema supports them.
@@ -65,16 +78,21 @@ function ClubsPage() {
     []
   );
 
+  const visibleClubs = clubsQuery.data ?? [];
+
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="headline text-3xl font-bold text-ink">Clubs</h2>
           <p className="mt-1 text-slate">Browse, filter, and create clubs in one place.</p>
+          {isMember(role) ? <p className="mt-2 text-xs text-slate">Read-only for member role.</p> : null}
         </div>
-        <Button variant="secondary" onClick={() => setIsFormOpen(true)}>
-          Create Club
-        </Button>
+        {canCreateClub ? (
+          <Button variant="secondary" onClick={() => setIsFormOpen(true)}>
+            Create Club
+          </Button>
+        ) : null}
       </div>
 
       <Card className="space-y-3">
@@ -131,27 +149,33 @@ function ClubsPage() {
         </div>
       ) : null}
 
-      {clubsQuery.data && clubsQuery.data.length === 0 ? (
+      {clubsQuery.data && visibleClubs.length === 0 ? (
         <EmptyState
           title="No Results Found"
-          description="No clubs matched your filters. Try another search query or category."
+          description="No clubs matched your filters."
         />
       ) : null}
 
-      <AddItemBox
-        title="Quick Category Tag"
-        placeholder="Enter a category tag"
-        buttonLabel="Add Tag"
-        validate={(value) =>
-          localCategoryTags.some((item) => item.toLowerCase() === value.toLowerCase())
-            ? "This tag already exists."
-            : null
-        }
-        onAdd={async (value) => {
-          setLocalCategoryTags((prev) => [...prev, value]);
-          toast.success("Category tag added.");
-        }}
-      />
+      {canAddQuickTag ? (
+        <AddItemBox
+          title="Quick Category Tag"
+          placeholder="Enter a category tag"
+          buttonLabel="Add Tag"
+          validate={(value) =>
+            localCategoryTags.some((item) => item.toLowerCase() === value.toLowerCase())
+              ? "This tag already exists."
+              : null
+          }
+          onAdd={async (value) => {
+            if (!canAddQuickTag) {
+              toast.error("You do not have permission to add tags.");
+              return;
+            }
+            setLocalCategoryTags((prev) => [...prev, value]);
+            toast.success("Category tag added.");
+          }}
+        />
+      ) : null}
 
       {localCategoryTags.length > 0 ? (
         <Card>
@@ -166,9 +190,11 @@ function ClubsPage() {
         </Card>
       ) : null}
 
-      {clubsQuery.data && clubsQuery.data.length > 0 ? (
+      {visibleClubs.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {clubsQuery.data.map((club) => (
+          {visibleClubs.map((club) => {
+            const canEditThisClub = canManageClubResource(role, userClubId, club.id);
+            return (
             <Card key={`${club.id}-${profileRevision}`}>
               <h3 className="headline text-xl font-semibold text-ink">{club.name}</h3>
               <p className="mt-1 text-sm text-slate">
@@ -177,8 +203,13 @@ function ClubsPage() {
               <div className="mt-3 space-y-2">
                 <EditableField
                   label="Category"
+                  canEdit={canUpdateClub && canEditThisClub}
                   value={getClubLocalProfile(club.id).category ?? club.category}
                   onSave={async (nextValue) => {
+                    if (!canUpdateClub || !canEditThisClub) {
+                      toast.error("You do not have permission to edit clubs.");
+                      return;
+                    }
                     upsertClubLocalProfile(club.id, { category: nextValue });
                     setProfileRevision((prev) => prev + 1);
                     toast.success("Category updated locally.");
@@ -187,8 +218,13 @@ function ClubsPage() {
                 <EditableField
                   label="Description"
                   multiline
+                  canEdit={canUpdateClub && canEditThisClub}
                   value={getClubLocalProfile(club.id).description ?? club.description}
                   onSave={async (nextValue) => {
+                    if (!canUpdateClub || !canEditThisClub) {
+                      toast.error("You do not have permission to edit clubs.");
+                      return;
+                    }
                     upsertClubLocalProfile(club.id, { description: nextValue });
                     setProfileRevision((prev) => prev + 1);
                     toast.success("Description updated locally.");
@@ -199,11 +235,12 @@ function ClubsPage() {
                 View details
               </Link>
             </Card>
-          ))}
+            );
+          })}
         </div>
       ) : null}
 
-      {isFormOpen ? (
+      {isFormOpen && canCreateClub ? (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4">
           <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl">
             <h3 className="headline mb-4 text-2xl font-semibold text-ink">Create Club</h3>

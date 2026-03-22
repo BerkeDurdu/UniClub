@@ -110,7 +110,7 @@ export const messageSchema = z.object({
   subject: z.string().min(1, "Subject is required"),
   content: z.string().min(1, "Content is required"),
   club_id: z.number().int().positive("Club is required"),
-  member_id: z.number().int().positive("Member is required"),
+  receiver_user_id: z.number().int().positive("Recipient is required"),
 });
 export type MessageFormValues = z.infer<typeof messageSchema>;
 

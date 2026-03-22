@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { advisorSchema, type AdvisorFormValues } from "../../validation/schemas";
 import { getClubs } from "../../api/services/clubService";
-import type { AdvisorCreatePayload } from "../../types";
+import type { AdvisorCreatePayload, Club } from "../../types";
 import FormField from "./FormField";
 import Button from "../common/Button";
 
@@ -11,13 +11,16 @@ interface AdvisorFormProps {
   onSubmit: (payload: AdvisorCreatePayload) => Promise<void>;
   onCancel: () => void;
   isSubmitting: boolean;
+  clubs?: Club[];
 }
 
-function AdvisorForm({ onSubmit, onCancel, isSubmitting }: AdvisorFormProps) {
-  const { data: clubs = [] } = useQuery({
+function AdvisorForm({ onSubmit, onCancel, isSubmitting, clubs: providedClubs }: AdvisorFormProps) {
+  const { data: queriedClubs = [] } = useQuery({
     queryKey: ["clubs"],
     queryFn: () => getClubs(),
+    enabled: !providedClubs,
   });
+  const clubs = providedClubs ?? queriedClubs;
 
   const {
     register,

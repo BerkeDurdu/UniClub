@@ -15,6 +15,7 @@ import toast from "react-hot-toast";
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { getCurrentUser, logout } from "../../api/services/authService";
+import { canViewSection, type AppSection } from "../../auth/permissions";
 import Button from "../common/Button";
 import HealthIndicator from "./HealthIndicator";
 
@@ -22,6 +23,7 @@ interface NavItem {
   to: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  section?: AppSection;
 }
 
 interface NavGroup {
@@ -43,16 +45,16 @@ const navGroups: NavGroup[] = [
     items: [
       { to: "/members", label: "Members", icon: Users },
       { to: "/advisors", label: "Advisors", icon: GraduationCap },
-      { to: "/board-members", label: "Board", icon: Shield },
+      { to: "/board-members", label: "Board", icon: Shield, section: "board_manage" },
     ],
   },
   {
     title: "Operations",
     items: [
       { to: "/venues", label: "Venues", icon: MapPin },
-      { to: "/budgets", label: "Budgets", icon: DollarSign },
-      { to: "/registrations", label: "Registrations", icon: ClipboardList },
-      { to: "/sponsorships", label: "Sponsors", icon: Handshake },
+      { to: "/budgets", label: "Budgets", icon: DollarSign, section: "budgets" },
+      { to: "/registrations", label: "Registrations", icon: ClipboardList, section: "registrations_manage" },
+      { to: "/sponsorships", label: "Sponsors", icon: Handshake, section: "sponsorships" },
       { to: "/messages", label: "Messages", icon: MessageSquare },
     ],
   },
@@ -60,7 +62,20 @@ const navGroups: NavGroup[] = [
 
 function AppLayout() {
   const user = getCurrentUser();
+  const role = user?.role;
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  const visibleNavGroups = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        if (!item.section) {
+          return true;
+        }
+        return canViewSection(role, item.section);
+      }),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <div className="min-h-screen text-ink">
@@ -85,7 +100,7 @@ function AppLayout() {
 
           {/* Desktop navigation */}
           <nav className="hidden items-center gap-1 sm:flex">
-            {navGroups.map((group) =>
+            {visibleNavGroups.map((group) =>
               group.items.map(({ to, label, icon: Icon }) => (
                 <NavLink
                   key={to}
@@ -124,7 +139,7 @@ function AppLayout() {
         {/* Mobile navigation dropdown */}
         {mobileNavOpen ? (
           <div className="border-t border-slate/20 bg-white px-4 py-3 sm:hidden">
-            {navGroups.map((group) => (
+            {visibleNavGroups.map((group) => (
               <div key={group.title} className="mb-3">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate">
                   {group.title}

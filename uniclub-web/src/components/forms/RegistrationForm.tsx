@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { registrationSchema, type RegistrationFormValues } from "../../validation/schemas";
 import { getEvents } from "../../api/services/eventService";
 import { getMembers } from "../../api/services/memberService";
-import type { RegistrationCreatePayload } from "../../types";
+import type { Event, Member, RegistrationCreatePayload } from "../../types";
 import FormField from "./FormField";
 import Button from "../common/Button";
 
@@ -12,18 +12,24 @@ interface RegistrationFormProps {
   onSubmit: (payload: RegistrationCreatePayload) => Promise<void>;
   onCancel: () => void;
   isSubmitting: boolean;
+  events?: Event[];
+  members?: Member[];
 }
 
-function RegistrationForm({ onSubmit, onCancel, isSubmitting }: RegistrationFormProps) {
-  const { data: events = [] } = useQuery({
+function RegistrationForm({ onSubmit, onCancel, isSubmitting, events: providedEvents, members: providedMembers }: RegistrationFormProps) {
+  const { data: queriedEvents = [] } = useQuery({
     queryKey: ["events"],
     queryFn: () => getEvents(),
+    enabled: !providedEvents,
   });
 
-  const { data: members = [] } = useQuery({
+  const { data: queriedMembers = [] } = useQuery({
     queryKey: ["members"],
     queryFn: () => getMembers(),
+    enabled: !providedMembers,
   });
+  const events = providedEvents ?? queriedEvents;
+  const members = providedMembers ?? queriedMembers;
 
   const {
     register,

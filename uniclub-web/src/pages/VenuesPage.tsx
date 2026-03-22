@@ -1,4 +1,7 @@
 import { useState } from "react";
+import toast from "react-hot-toast";
+import { getCurrentUser } from "../api/services/authService";
+import { canPerformAction, isMember } from "../auth/permissions";
 import { useVenues, useCreateVenue } from "../hooks/useVenues";
 import type { VenueCreatePayload } from "../types";
 import Button from "../components/common/Button";
@@ -10,12 +13,18 @@ import Modal from "../components/common/Modal";
 import VenueForm from "../components/forms/VenueForm";
 
 function VenuesPage() {
+  const role = getCurrentUser()?.role;
+  const canCreateVenue = canPerformAction(role, "create_venue");
   const [isFormOpen, setIsFormOpen] = useState(false);
 
   const venuesQuery = useVenues();
   const createMutation = useCreateVenue();
 
   const handleCreate = async (payload: VenueCreatePayload) => {
+    if (!canCreateVenue) {
+      toast.error("You do not have permission to add venues.");
+      return;
+    }
     await createMutation.mutateAsync(payload);
     setIsFormOpen(false);
   };
@@ -26,10 +35,13 @@ function VenuesPage() {
         <div>
           <h2 className="headline text-3xl font-bold text-ink">Venues</h2>
           <p className="mt-1 text-slate">Browse and manage event venues.</p>
+          {isMember(role) ? <p className="mt-2 text-xs text-slate">Read-only for member role.</p> : null}
         </div>
-        <Button variant="secondary" onClick={() => setIsFormOpen(true)}>
-          Add Venue
-        </Button>
+        {canCreateVenue ? (
+          <Button variant="secondary" onClick={() => setIsFormOpen(true)}>
+            Add Venue
+          </Button>
+        ) : null}
       </div>
 
       {venuesQuery.isError ? <ErrorMessage message="Could not load venues." /> : null}
@@ -73,13 +85,15 @@ function VenuesPage() {
         </div>
       ) : null}
 
-      <Modal title="Add Venue" isOpen={isFormOpen} onClose={() => setIsFormOpen(false)}>
-        <VenueForm
-          onSubmit={handleCreate}
-          onCancel={() => setIsFormOpen(false)}
-          isSubmitting={createMutation.isPending}
-        />
-      </Modal>
+      {canCreateVenue ? (
+        <Modal title="Add Venue" isOpen={isFormOpen} onClose={() => setIsFormOpen(false)}>
+          <VenueForm
+            onSubmit={handleCreate}
+            onCancel={() => setIsFormOpen(false)}
+            isSubmitting={createMutation.isPending}
+          />
+        </Modal>
+      ) : null}
     </section>
   );
 }

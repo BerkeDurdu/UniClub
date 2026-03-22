@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { budgetSchema, type BudgetFormValues } from "../../validation/schemas";
 import { getEvents } from "../../api/services/eventService";
-import type { BudgetCreatePayload } from "../../types";
+import type { BudgetCreatePayload, Event } from "../../types";
 import FormField from "./FormField";
 import Button from "../common/Button";
 
@@ -11,13 +11,16 @@ interface BudgetFormProps {
   onSubmit: (payload: BudgetCreatePayload) => Promise<void>;
   onCancel: () => void;
   isSubmitting: boolean;
+  events?: Event[];
 }
 
-function BudgetForm({ onSubmit, onCancel, isSubmitting }: BudgetFormProps) {
-  const { data: events = [] } = useQuery({
+function BudgetForm({ onSubmit, onCancel, isSubmitting, events: providedEvents }: BudgetFormProps) {
+  const { data: queriedEvents = [] } = useQuery({
     queryKey: ["events"],
     queryFn: () => getEvents(),
+    enabled: !providedEvents,
   });
+  const events = providedEvents ?? queriedEvents;
 
   const {
     register,

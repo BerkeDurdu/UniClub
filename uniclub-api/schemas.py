@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import Optional, List
 from datetime import date, datetime
-from models import EventStatus, BoardRole
+from models import EventStatus, BoardRole, UserRole
 
 
 class ResponseSchema(BaseModel):
@@ -209,7 +209,7 @@ class MessageCreate(BaseModel):
     subject: str = Field(..., min_length=1)
     content: str = Field(..., min_length=1)
     club_id: int
-    member_id: int
+    receiver_user_id: int
     sent_at: Optional[datetime] = None
 
 class MessageResponse(ResponseSchema):
@@ -217,8 +217,19 @@ class MessageResponse(ResponseSchema):
     subject: str
     content: str
     club_id: int
-    member_id: int
+    sender_user_id: int
+    receiver_user_id: int
     sent_at: datetime
+    sender_name: Optional[str] = None
+    sender_role: Optional[UserRole] = None
+    receiver_name: Optional[str] = None
+    receiver_role: Optional[UserRole] = None
+
+class MessageRecipientOption(ResponseSchema):
+    id: int
+    full_name: str
+    role: UserRole
+    club_id: Optional[int] = None
 
 # ==========================
 # SPONSORSHIP SCHEMAS
@@ -267,3 +278,47 @@ class MemberNetworkReport(ResponseSchema):
     registrations: List[RegistrationResponse]
     participant_records: List[ParticipantResponse]
     counts: dict[str, int]
+
+
+# ==========================
+# AUTH SCHEMAS
+# ==========================
+class UserRegister(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+    full_name: str = Field(..., min_length=1)
+    role: UserRole
+    club_id: Optional[int] = None
+    club_input_mode: Optional[str] = None
+    manual_club_name: Optional[str] = None
+    manual_club_category: Optional[str] = None
+    manual_club_description: Optional[str] = None
+    manual_club_founded_date: Optional[date] = None
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserResponse(ResponseSchema):
+    id: int
+    email: str
+    full_name: str
+    role: UserRole
+    club_id: Optional[int] = None
+    is_active: bool
+    created_at: datetime
+
+class UserMeResponse(ResponseSchema):
+    id: int
+    email: str
+    full_name: str
+    role: UserRole
+    club_id: Optional[int] = None
+    is_active: bool
+    created_at: datetime
+    profile: Optional[MemberResponse | AdvisorResponse | BoardMemberResponse] = None
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse

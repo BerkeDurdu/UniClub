@@ -6,6 +6,16 @@ export async function getBudgetByEvent(eventId: number): Promise<Budget> {
   return response.data;
 }
 
+export async function getBudgetByEventOptional(eventId: number): Promise<Budget | null> {
+  const response = await apiClient.get<Budget | { detail: string }>(`/budgets/${eventId}`, {
+    validateStatus: (status) => status === 200 || status === 404,
+  });
+  if (response.status === 404) {
+    return null;
+  }
+  return response.data as Budget;
+}
+
 export async function createBudget(payload: BudgetCreatePayload): Promise<Budget> {
   const response = await apiClient.post<Budget>("/budgets", payload);
   return response.data;

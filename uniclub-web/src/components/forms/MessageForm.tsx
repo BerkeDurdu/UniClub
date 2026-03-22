@@ -1,9 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { useQuery } from "@tanstack/react-query";
 import { messageSchema, type MessageFormValues } from "../../validation/schemas";
-import { getClubs } from "../../api/services/clubService";
-import { getMembers } from "../../api/services/memberService";
+import { getCurrentUser } from "../../api/services/authService";
+import { useMessageRecipientOptions } from "../../hooks/useMessages";
 import type { MessageCreatePayload } from "../../types";
 import FormField from "./FormField";
 import Button from "../common/Button";
@@ -15,30 +15,42 @@ interface MessageFormProps {
 }
 
 function MessageForm({ onSubmit, onCancel, isSubmitting }: MessageFormProps) {
-  const { data: clubs = [] } = useQuery({
-    queryKey: ["clubs"],
-    queryFn: () => getClubs(),
-  });
+  const currentUser = getCurrentUser();
+  const { data: recipients = [] } = useMessageRecipientOptions();
 
-  const { data: members = [] } = useQuery({
-    queryKey: ["members"],
-    queryFn: () => getMembers(),
-  });
+  const defaultClubId = currentUser?.clubId ?? undefined;
+  const defaultRecipientId = recipients[0]?.id;
 
   const {
     register,
     handleSubmit,
     reset,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<MessageFormValues>({
     resolver: zodResolver(messageSchema),
     defaultValues: {
       subject: "",
       content: "",
-      club_id: clubs[0]?.id,
-      member_id: members[0]?.id,
+      club_id: defaultClubId,
+      receiver_user_id: defaultRecipientId,
     },
   });
+
+  const selectedRecipientId = watch("receiver_user_id");
+
+  useEffect(() => {
+    if (typeof currentUser?.clubId === "number") {
+      setValue("club_id", currentUser.clubId, { shouldValidate: true });
+    }
+  }, [currentUser?.clubId, setValue]);
+
+  useEffect(() => {
+    if (!selectedRecipientId && recipients.length > 0) {
+      setValue("receiver_user_id", recipients[0].id, { shouldValidate: true });
+    }
+  }, [recipients, selectedRecipientId, setValue]);
 
   const submit = async (values: MessageFormValues) => {
     await onSubmit(values);
@@ -67,22 +79,23 @@ function MessageForm({ onSubmit, onCancel, isSubmitting }: MessageFormProps) {
           error={errors.club_id}
           registration={register("club_id", { valueAsNumber: true })}
         >
-          {clubs.map((club) => (
-            <option key={club.id} value={club.id}>
-              {club.name}
-            </option>
-          ))}
+          {typeof currentUser?.clubId === "number" ? (
+            <option value={currentUser.clubId}>My Club</option>
+          ) : (
+            <option value="">No club assigned</option>
+          )}
         </FormField>
 
         <FormField
-          label="Member"
+          label="Recipient"
           type="select"
-          error={errors.member_id}
-          registration={register("member_id", { valueAsNumber: true })}
+          error={errors.receiver_user_id}
+          registration={register("receiver_user_id", { valueAsNumber: true })}
         >
-          {members.map((member) => (
-            <option key={member.id} value={member.id}>
-              {member.first_name} {member.last_name}
+          <option value="">Select recipient</option>
+          {recipients.map((recipient) => (
+            <option key={recipient.id} value={recipient.id}>
+              {recipient.full_name} ({recipient.role})
             </option>
           ))}
         </FormField>
