@@ -7,7 +7,7 @@ export type BoardRole =
   | "Treasurer"
   | "Coordinator";
 
-export type UserRole = "member" | "advisor" | "board_member";
+export type UserRole = "member" | "advisor" | "board_member" | "admin";
 
 export interface AuthUser {
   id: number;
@@ -17,6 +17,7 @@ export interface AuthUser {
   clubId: number | null;
   isActive: boolean;
   createdAt: string;
+  permissions?: string[];
 }
 
 export interface Club {

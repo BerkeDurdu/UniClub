@@ -73,7 +73,17 @@ export function isMember(role: UserRole | null | undefined): boolean {
 }
 
 export function isStaffRole(role: UserRole | null | undefined): boolean {
-  return role === "advisor" || role === "board_member";
+  return role === "advisor" || role === "board_member" || role === "admin";
+}
+
+export function isAdmin(role: UserRole | null | undefined): boolean {
+  return role === "admin";
+}
+
+export function hasPermission(permissions: string[] | null | undefined, code: string): boolean {
+  if (!permissions || permissions.length === 0) return false;
+  if (permissions.includes("*")) return true;
+  return permissions.includes(code);
 }
 
 export function isSameClub(

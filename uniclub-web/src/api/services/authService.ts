@@ -18,6 +18,7 @@ interface BackendAuthMeResponse extends BackendAuthUser {
   profile?: {
     id?: number;
   } | null;
+  permissions?: string[];
 }
 
 interface TokenResponse {
@@ -25,6 +26,16 @@ interface TokenResponse {
   token_type: "bearer";
   user: BackendAuthUser;
 }
+
+interface ChallengeResponse {
+  kind: "challenge";
+  challenge_token: string;
+  methods: Array<"totp" | "email" | "webauthn">;
+}
+
+export type LoginResult =
+  | { kind: "ok"; user: AuthUser }
+  | { kind: "challenge"; challengeToken: string; methods: ChallengeResponse["methods"] };
 
 interface RegisterRequest {
   full_name: string;
@@ -68,7 +79,7 @@ export interface AuthMeContext {
   memberProfileId: number | null;
 }
 
-function mapBackendUser(user: BackendAuthUser): AuthUser {
+function mapBackendUser(user: BackendAuthUser, permissions?: string[]): AuthUser {
   return {
     id: user.id,
     email: user.email,
@@ -77,7 +88,12 @@ function mapBackendUser(user: BackendAuthUser): AuthUser {
     clubId: user.club_id,
     isActive: user.is_active,
     createdAt: user.created_at,
+    permissions: permissions ?? [],
   };
+}
+
+export function setSessionToken(token: string): void {
+  window.localStorage.setItem("token", token);
 }
 
 function setSession(user: AuthUser, token: string): void {
@@ -142,17 +158,34 @@ export async function register(payload: RegisterPayload): Promise<AuthUser> {
   }
 }
 
-export async function login(payload: LoginPayload): Promise<AuthUser> {
+export async function login(payload: LoginPayload): Promise<LoginResult> {
   try {
-    const response = await apiClient.post<TokenResponse>("/auth/login", {
+    const response = await apiClient.post<TokenResponse | ChallengeResponse>("/auth/login", {
       email: payload.email.trim().toLowerCase(),
       password: payload.password,
     });
-    const authUser = mapBackendUser(response.data.user);
-    setSession(authUser, response.data.access_token);
-    return authUser;
+    const data = response.data as TokenResponse | ChallengeResponse;
+    if ((data as ChallengeResponse).kind === "challenge") {
+      const c = data as ChallengeResponse;
+      return { kind: "challenge", challengeToken: c.challenge_token, methods: c.methods };
+    }
+    const tr = data as TokenResponse;
+    const authUser = mapBackendUser(tr.user);
+    setSession(authUser, tr.access_token);
+    return { kind: "ok", user: authUser };
   } catch (error) {
     throw new Error(getErrorMessage(error));
+  }
+}
+
+export async function finalizeTokenLogin(token: string): Promise<AuthUser> {
+  setSessionToken(token);
+  try {
+    const ctx = await fetchAuthMeContext();
+    return ctx.user;
+  } catch (error) {
+    logout();
+    throw error;
   }
 }
 
@@ -174,7 +207,7 @@ export async function fetchCurrentUser(): Promise<AuthUser> {
 export async function fetchAuthMeContext(): Promise<AuthMeContext> {
   try {
     const response = await apiClient.get<BackendAuthMeResponse>("/auth/me");
-    const authUser = mapBackendUser(response.data);
+    const authUser = mapBackendUser(response.data, response.data.permissions);
     const token = window.localStorage.getItem("token");
     if (token) {
       setSession(authUser, token);

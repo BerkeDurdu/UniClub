@@ -1,7 +1,7 @@
 import axios from "axios";
 import toast from "react-hot-toast";
 
-const FALLBACK_API_BASE_URL = "http://127.0.0.1:8010";
+const FALLBACK_API_BASE_URL = "http://127.0.0.1:8000";
 const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
 // If a stale dev session is still pointing to 8000 (currently unhealthy),

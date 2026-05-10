@@ -10,12 +10,15 @@ import {
   ClipboardList,
   Handshake,
   MessageSquare,
+  Lock,
+  KeyRound,
+  UserCog,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { getCurrentUser, logout } from "../../api/services/authService";
-import { canViewSection, type AppSection } from "../../auth/permissions";
+import { canViewSection, isAdmin, type AppSection } from "../../auth/permissions";
 import Button from "../common/Button";
 import HealthIndicator from "./HealthIndicator";
 
@@ -24,6 +27,7 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   section?: AppSection;
+  adminOnly?: boolean;
 }
 
 interface NavGroup {
@@ -58,6 +62,19 @@ const navGroups: NavGroup[] = [
       { to: "/messages", label: "Messages", icon: MessageSquare },
     ],
   },
+  {
+    title: "Account",
+    items: [
+      { to: "/settings/security", label: "Security", icon: Lock },
+    ],
+  },
+  {
+    title: "Admin",
+    items: [
+      { to: "/admin/users", label: "Users", icon: UserCog, adminOnly: true },
+      { to: "/admin/permissions", label: "Permissions", icon: KeyRound, adminOnly: true },
+    ],
+  },
 ];
 
 function AppLayout() {
@@ -69,6 +86,7 @@ function AppLayout() {
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => {
+        if (item.adminOnly && !isAdmin(role)) return false;
         if (!item.section) {
           return true;
         }

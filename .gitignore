@@ -1,0 +1,32 @@
+# IDE / agent
+.claude/
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.coverage
+.coverage.*
+htmlcov/
+
+# Node / frontend
+node_modules/
+dist/
+coverage/
+.vite/
+
+# Env files (provider secrets!)
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Playwright artifacts
+test-results/
+playwright-report/

@@ -11,10 +11,13 @@ from .messages import router as messages_router
 from .sponsorships import router as sponsorships_router
 from .reports import router as reports_router
 from .auth import router as auth_router
+from .admin import router as admin_router
+from .twofa import router as twofa_router
+from .oauth import router as oauth_router
 
 all_routers = [
     clubs_router, advisors_router, members_router, board_members_router,
     venues_router, events_router, budgets_router, registrations_router,
     participants_router, messages_router, sponsorships_router, reports_router,
-    auth_router,
+    auth_router, admin_router, twofa_router, oauth_router,
 ]

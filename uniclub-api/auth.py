@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Set
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 
 from config import settings
 from database import get_session
-from models import User, UserRole
+from models import User, UserRole, Permission, RolePermission
 
 # ---------------------
 # Password Hashing
@@ -38,63 +38,64 @@ def create_access_token(user: User) -> str:
         "role": user.role.value if isinstance(user.role, UserRole) else user.role,
         "club_id": user.club_id,
         "exp": expire,
+        "purpose": "access",
     }
     return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
 
-def decode_access_token(token: str) -> dict:
+def create_challenge_token(user: User) -> str:
+    """Short-lived token that proves password was verified, pending 2FA."""
+    expire = datetime.utcnow() + timedelta(minutes=5)
+    payload = {
+        "sub": str(user.id),
+        "user_id": user.id,
+        "exp": expire,
+        "purpose": "2fa",
+    }
+    return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
+
+def decode_token(token: str) -> dict:
     return jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+
+# Backwards-compat alias used elsewhere
+def decode_access_token(token: str) -> dict:
+    return decode_token(token)
 
 # ---------------------
 # Auth Dependencies
 # ---------------------
 
+def _unauth(detail: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 def get_current_user(
     token: Optional[str] = Depends(oauth2_scheme),
     session: Session = Depends(get_session),
 ) -> User:
-    """Extract and validate JWT, return the User object. Raises 401 on any failure."""
     if token is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _unauth("Not authenticated")
     try:
-        payload = decode_access_token(token)
+        payload = decode_token(token)
     except ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _unauth("Token has expired")
     except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _unauth("Could not validate credentials")
 
-    user_id: int = payload.get("user_id")
+    if payload.get("purpose") != "access":
+        raise _unauth("Token cannot be used for this resource")
+
+    user_id = payload.get("user_id")
     if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
+        raise _unauth("Could not validate credentials")
     user = session.get(User, user_id)
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _unauth("User not found")
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Account is deactivated",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _unauth("Account is deactivated")
     return user
 
 
@@ -102,7 +103,6 @@ def get_optional_user(
     token: Optional[str] = Depends(oauth2_scheme),
     session: Session = Depends(get_session),
 ) -> Optional[User]:
-    """Like get_current_user but returns None instead of raising for public endpoints."""
     if token is None:
         return None
     try:
@@ -115,33 +115,64 @@ def require_roles(*roles: UserRole):
     """Returns a dependency that checks the current user has one of the specified roles."""
     def _check(current_user: User = Depends(get_current_user)) -> User:
         user_role = current_user.role if isinstance(current_user.role, UserRole) else UserRole(current_user.role)
+        if user_role == UserRole.admin:
+            return current_user  # admin always allowed
         if user_role not in roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions",
-            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
         return current_user
     return _check
 
 
 def require_same_club_or_forbid(club_id: int, current_user: User) -> None:
-    """Check that the current user's club_id matches the given club_id. Raises 403 if not."""
+    user_role = current_user.role if isinstance(current_user.role, UserRole) else UserRole(current_user.role)
+    if user_role == UserRole.admin:
+        return
     if current_user.club_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     if current_user.club_id != club_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
 
 
 def require_same_user_or_forbid(user_id: int, current_user: User) -> None:
-    """Check that the current user's id matches the given user_id. Raises 403 if not."""
+    user_role = current_user.role if isinstance(current_user.role, UserRole) else UserRole(current_user.role)
+    if user_role == UserRole.admin:
+        return
     if current_user.id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+
+# ---------------------
+# Permission system
+# ---------------------
+
+def get_role_permissions(session: Session, role: UserRole) -> Set[str]:
+    """Return the set of permission codes granted to a role."""
+    rows = session.exec(
+        select(Permission.code)
+        .join(RolePermission, RolePermission.permission_id == Permission.id)
+        .where(RolePermission.role == role)
+    ).all()
+    return set(rows)
+
+
+def require_permission(code: str):
+    """Dependency factory: 403 unless current user's role has the permission."""
+    def _check(
+        current_user: User = Depends(get_current_user),
+        session: Session = Depends(get_session),
+    ) -> User:
+        role = current_user.role if isinstance(current_user.role, UserRole) else UserRole(current_user.role)
+        if role == UserRole.admin:
+            return current_user
+        codes = get_role_permissions(session, role)
+        if code not in codes:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Missing permission: {code}")
+        return current_user
+    return _check
+
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    role = current_user.role if isinstance(current_user.role, UserRole) else UserRole(current_user.role)
+    if role != UserRole.admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    return current_user

@@ -317,6 +317,7 @@ class UserMeResponse(ResponseSchema):
     is_active: bool
     created_at: datetime
     profile: Optional[MemberResponse | AdvisorResponse | BoardMemberResponse] = None
+    permissions: List[str] = []
 
 class TokenResponse(BaseModel):
     access_token: str

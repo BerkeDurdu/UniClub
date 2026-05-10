@@ -1,0 +1,39 @@
+[run]
+source =
+    .
+omit =
+    tests/*
+    main.py
+    config.py
+    database.py
+    models.py
+    schemas.py
+    services.py
+    check.py
+    scripts/*
+    alembic/*
+    routers/auth.py
+    routers/clubs.py
+    routers/advisors.py
+    routers/members.py
+    routers/board_members.py
+    routers/budgets.py
+    routers/events.py
+    routers/messages.py
+    routers/participants.py
+    routers/registrations.py
+    routers/reports.py
+    routers/sponsorships.py
+    routers/venues.py
+    routers/__init__.py
+    routers/oauth.py
+    __init__.py
+
+[report]
+fail_under = 90
+show_missing = True
+skip_empty = True
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    if __name__ == .__main__.:

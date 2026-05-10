@@ -14,6 +14,7 @@ Run the server: `uvicorn main:app --reload`
 from fastapi import FastAPI, Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from sqlmodel import Session, select
 from sqlalchemy import text, inspect
 from sqlalchemy.exc import IntegrityError
@@ -26,6 +27,7 @@ from models import (
     User, UserRole
 )
 from auth import hash_password
+from permissions_catalog import seed_permissions
 
 from routers import all_routers
 from config import settings
@@ -52,6 +54,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Session middleware required by Authlib for OAuth state across redirects.
+app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
 
 # ==========================
 # GLOBAL ERROR HANDLING
@@ -278,8 +283,66 @@ def seed_data():
         session.commit()
 
 
+def migrate_userrole_enum():
+    """Ensure the Postgres `userrole` enum has the 'admin' value (added by bonus)."""
+    if engine.dialect.name != "postgresql":
+        return
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'admin'"))
+    except Exception as e:
+        logger.warning("userrole enum migration skipped: %s", e)
+
+
+def migrate_user_role_check():
+    """Update the legacy ck_user_role_requires_club constraint to allow admin without a club."""
+    if engine.dialect.name != "postgresql":
+        return
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE app_user DROP CONSTRAINT IF EXISTS ck_user_role_requires_club"))
+            conn.execute(text("""
+                ALTER TABLE app_user
+                ADD CONSTRAINT ck_user_role_requires_club
+                CHECK ((role IN ('member','admin')) OR (club_id IS NOT NULL))
+            """))
+    except Exception as e:
+        logger.warning("ck_user_role_requires_club migration skipped: %s", e)
+
+
+def seed_admin_user():
+    """Create the seeded admin@uniclub.local user."""
+    with Session(engine) as session:
+        email = settings.seed_admin_email.lower().strip()
+        password = (settings.seed_admin_password or f"admin-{settings.secret_key[:12]}-Seed!").strip()
+        existing = session.exec(select(User).where(User.email == email)).first()
+        if existing:
+            existing.role = UserRole.admin
+            existing.club_id = None
+            existing.is_active = True
+            existing.hashed_password = hash_password(password)
+            session.add(existing)
+            session.commit()
+            return
+        admin = User(
+            email=email,
+            hashed_password=hash_password(password),
+            full_name="UniClub Admin",
+            role=UserRole.admin,
+            club_id=None,
+            is_active=True,
+        )
+        session.add(admin)
+        try:
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+
+
 def migrate_message_schema():
     """Apply lightweight compatibility migration for message routing columns."""
+    if engine.dialect.name != "postgresql":
+        return
     with engine.begin() as connection:
         inspector = inspect(connection)
         table_names = inspector.get_table_names()
@@ -349,9 +412,14 @@ def on_startup():
     so that schema definitions are strictly deployed by running `alembic upgrade head`.
     However, this serves as a rapid zero-to-one setup safety net.
     """
+    migrate_userrole_enum()  # must run before create_all so enum has admin
     create_db_and_tables()
+    migrate_user_role_check()
     migrate_message_schema()
     seed_data()
+    seed_admin_user()
+    with Session(engine) as session:
+        seed_permissions(session)
 
 @app.get("/", tags=["Health"], summary="Root Endpoint")
 def read_root():

@@ -8,6 +8,7 @@ class UserRole(str, enum.Enum):
     member = "member"
     advisor = "advisor"
     board_member = "board_member"
+    admin = "admin"
 
 class EventStatus(str, enum.Enum):
     Scheduled = "Scheduled"
@@ -25,7 +26,7 @@ class User(SQLModel, table=True):
     __tablename__ = "app_user"
     __table_args__ = (
         CheckConstraint("length(trim(full_name)) > 0", name="ck_user_full_name_non_empty"),
-        CheckConstraint("(role = 'member') OR (club_id IS NOT NULL)", name="ck_user_role_requires_club"),
+        CheckConstraint("(role IN ('member','admin')) OR (club_id IS NOT NULL)", name="ck_user_role_requires_club"),
     )
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(unique=True, index=True)
@@ -220,3 +221,76 @@ class Participant(SQLModel, table=True):
     
     member_id: Optional[int] = Field(default=None, foreign_key="member.id")
     member: Optional[Member] = Relationship(back_populates="participants")
+
+
+# ==========================
+# BONUS: Permission system, OAuth, 2FA tables
+# ==========================
+
+class Permission(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    code: str = Field(unique=True, index=True)
+    description: str = ""
+
+
+class RolePermission(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("role", "permission_id", name="uq_role_permission"),
+    )
+    id: Optional[int] = Field(default=None, primary_key=True)
+    role: UserRole = Field(sa_column=Column(Enum(UserRole)))
+    permission_id: int = Field(foreign_key="permission.id")
+
+
+class OAuthAccount(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_account_id", name="uq_oauth_provider_account"),
+    )
+    id: Optional[int] = Field(default=None, primary_key=True)
+    provider: str = Field(index=True)
+    provider_account_id: str = Field(index=True)
+    email: Optional[str] = Field(default=None)
+    user_id: int = Field(foreign_key="app_user.id")
+
+
+class UserTOTP(SQLModel, table=True):
+    __tablename__ = "user_totp"
+    user_id: int = Field(primary_key=True, foreign_key="app_user.id")
+    secret: str
+    confirmed_at: Optional[datetime] = Field(default=None)
+
+
+class UserEmailOTP(SQLModel, table=True):
+    __tablename__ = "user_email_otp"
+    user_id: int = Field(primary_key=True, foreign_key="app_user.id")
+    enabled: bool = Field(default=True)
+
+
+class EmailOTPChallenge(SQLModel, table=True):
+    __tablename__ = "email_otp_challenge"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="app_user.id", index=True)
+    code_hash: str
+    purpose: str = Field(default="login")  # "login" or "enable"
+    expires_at: datetime
+    consumed_at: Optional[datetime] = Field(default=None)
+
+
+class WebAuthnCredential(SQLModel, table=True):
+    __tablename__ = "webauthn_credential"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="app_user.id", index=True)
+    credential_id: str = Field(unique=True, index=True)
+    public_key: str  # base64-encoded COSE key
+    sign_count: int = Field(default=0)
+    label: str = Field(default="")
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
+class WebAuthnChallenge(SQLModel, table=True):
+    __tablename__ = "webauthn_challenge"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="app_user.id", index=True)
+    challenge: str
+    purpose: str = Field(default="register")  # "register" or "auth"
+    expires_at: datetime

@@ -10,3 +10,15 @@ alembic
 passlib[bcrypt]
 python-jose[cryptography]
 bcrypt==4.0.1
+# Bonus deps
+authlib
+httpx
+itsdangerous
+pyotp
+qrcode[pil]
+webauthn
+aiosmtplib
+# Test deps
+pytest
+pytest-cov
+pytest-asyncio

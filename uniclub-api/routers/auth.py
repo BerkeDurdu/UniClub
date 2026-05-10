@@ -5,7 +5,8 @@ from datetime import date
 from database import get_session
 from models import User, UserRole, Member, Advisor, BoardMember, Club
 from schemas import UserRegister, UserLogin, UserResponse, UserMeResponse, TokenResponse
-from auth import hash_password, verify_password, create_access_token, get_current_user
+from auth import hash_password, verify_password, create_access_token, create_challenge_token, get_current_user, get_role_permissions
+from routers.twofa import has_any_2fa, enabled_methods
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -99,19 +100,24 @@ def register(data: UserRegister, session: Session = Depends(get_session)):
     )
 
 
-@router.post("/login", response_model=TokenResponse, summary="Login and get JWT token")
+@router.post("/login", summary="Login. Returns either a JWT or a 2FA challenge.")
 def login(data: UserLogin, session: Session = Depends(get_session)):
     email = data.email.lower().strip()
     user = session.exec(select(User).where(User.email == email)).first()
 
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
-
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
-
     if not verify_password(data.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+
+    if has_any_2fa(session, user.id):
+        return {
+            "kind": "challenge",
+            "challenge_token": create_challenge_token(user),
+            "methods": enabled_methods(session, user.id),
+        }
 
     token = create_access_token(user)
     return TokenResponse(
@@ -158,6 +164,8 @@ def get_me(current_user: User = Depends(get_current_user), session: Session = De
                 "club_id": record.club_id,
             }
 
+    role_value = current_user.role if isinstance(current_user.role, UserRole) else UserRole(current_user.role)
+    perms = sorted(get_role_permissions(session, role_value)) if role_value != UserRole.admin else ["*"]
     return UserMeResponse(
         id=current_user.id,
         email=current_user.email,
@@ -167,6 +175,7 @@ def get_me(current_user: User = Depends(get_current_user), session: Session = De
         is_active=current_user.is_active,
         created_at=current_user.created_at,
         profile=profile,
+        permissions=perms,
     )
 
 
