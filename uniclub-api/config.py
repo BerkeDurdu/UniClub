@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     smtp_from: str = "no-reply@uniclub.local"
     smtp_use_tls: bool = True
 
+    # Resend HTTP API (preferred when SMTP outbound is blocked, e.g. Railway)
+    resend_api_key: Optional[str] = None
+    resend_from: Optional[str] = None
+
     # WebAuthn
     webauthn_rp_id: str = "localhost"
     webauthn_rp_name: str = "UniClub"

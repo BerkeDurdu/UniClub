@@ -1,13 +1,29 @@
-"""Email sender utility. Falls back to stdout when SMTP is not configured."""
+"""Email sender utility. Prefers Resend HTTP API, falls back to SMTP, then stdout."""
 import asyncio
 import logging
 import smtplib
 from email.message import EmailMessage
 from typing import Optional
 
+import httpx
+
 from config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _send_resend(to_email: str, subject: str, body: str) -> None:
+    sender = settings.resend_from or settings.smtp_from or "onboarding@resend.dev"
+    resp = httpx.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {settings.resend_api_key}",
+            "Content-Type": "application/json",
+        },
+        json={"from": sender, "to": [to_email], "subject": subject, "text": body},
+        timeout=8.0,
+    )
+    resp.raise_for_status()
 
 
 def _send_smtp(to_email: str, subject: str, body: str) -> None:
@@ -36,7 +52,15 @@ def _send_smtp(to_email: str, subject: str, body: str) -> None:
 
 
 def send_email(to_email: str, subject: str, body: str) -> None:
-    """Send an email synchronously. If SMTP isn't configured, log to stdout."""
+    """Send an email synchronously. Prefers Resend, then SMTP, finally stdout fallback."""
+    if settings.resend_api_key:
+        try:
+            _send_resend(to_email, subject, body)
+            return
+        except Exception as e:  # noqa: BLE001
+            logger.error("Resend send failed: %s", e)
+            print(f"\n[EMAIL OTP fallback] To: {to_email}\nSubject: {subject}\n{body}\n", flush=True)
+            return
     if not settings.smtp_host:
         logger.warning("[EMAIL OTP] To: %s | Subject: %s\n%s", to_email, subject, body)
         print(f"\n[EMAIL OTP] To: {to_email}\nSubject: {subject}\n{body}\n", flush=True)
