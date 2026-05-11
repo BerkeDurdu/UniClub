@@ -1,7 +1,9 @@
 # UniClub API Setup Guide
 
+**Production:** https://uniclub-production.up.railway.app · Swagger UI at `/docs`
+
 ## Architecture Overview
-This is a layered FastAP + SQLModel backend heavily leveraging PostgreSQL. The stack uses `alembic` to smoothly apply database changes.
+A layered FastAPI + SQLModel backend on top of PostgreSQL. Authentication covers email/password, Google + GitHub OAuth (Authlib), and three independent 2FA methods (TOTP, Email OTP, WebAuthn). Transactional email goes through the Resend HTTP API in production with SMTP and console fallbacks. Schema is created via SQLModel `create_all` for fast iteration; `alembic` is wired up for production-grade migrations once schemas stabilize.
 
 ## 1. Create and activate a virtual environment
 
@@ -124,9 +126,22 @@ Replace placeholders with real captures before final submission.
 - Technical documentation quality: architecture notes, relationship proof markdown, and test scenarios.
 - Technical depth: PostgreSQL constraints, enum modeling, partial unique index strategy, Alembic support.
 
+## Authentication endpoints
+
+| Path | Purpose |
+| --- | --- |
+| `POST /auth/register`, `POST /auth/login` | Email + password with bcrypt; returns JWT or a 2FA challenge token. |
+| `GET /auth/oauth/{google,github}/login` and `/callback` | OpenID Connect via Authlib. |
+| `GET /auth/me` | Current user, role, and effective permissions. |
+| `POST /auth/password/forgot`, `POST /auth/password/reset` | Self-service password reset. Forgot endpoint returns 200 unconditionally to prevent enumeration. Tokens are 32-byte urlsafe, SHA-256 hashed at rest, single-use, 1-hour TTL. |
+| `POST /2fa/totp/setup`, `/confirm`, `/disable` | TOTP enrollment. |
+| `POST /2fa/email/enable`, `/disable`, `/login/email/send`, `/verify` | Email OTP enrollment and login. |
+| `POST /2fa/webauthn/register/*`, `/login/webauthn/*` | WebAuthn / passkey enrollment and login. |
+| `GET/PUT /admin/permissions` | Live editing of role-to-permission grants (admin only). |
+
 ## Final Submission
 
-- GitHub URL: `<ADD_REPOSITORY_URL_HERE>`
-- Presentation file: `<ADD_PRESENTATION_FILE_NAME.pdf_or_pptx>`
-- Screenshot location: repository root `screenshots/`
-- Repository report file: `REPORT.md` (must be present at repository root)
+- GitHub URL: https://github.com/BerkeDurdu/UniClub
+- Presentation file: `UniClub.pptx` (in repository root or `presentations/`)
+- Screenshot location: `screenshots/`
+- Repository report file: `REPORT.md`

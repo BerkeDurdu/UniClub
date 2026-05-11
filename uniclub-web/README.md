@@ -1,7 +1,9 @@
 # UniClub Web
 
+**Production:** https://uni-club-bay.vercel.app · **Backend:** https://uniclub-production.up.railway.app
+
 UniClub Web is a React-based management interface for the UniClub FastAPI backend.
-It provides a single dashboard for clubs, events, members, registrations, and sponsorship flows.
+It provides a single dashboard for clubs, events, members, registrations, and sponsorship flows, plus a full authentication surface (email + password, Google / GitHub OAuth, three 2FA methods, and a self-service password reset).
 
 ## Tech Stack
 
@@ -30,8 +32,14 @@ It provides a single dashboard for clubs, events, members, registrations, and sp
 | Registrations | `/registrations` | Event registration management |
 | Sponsorships | `/sponsorships` | Sponsorship tracking |
 | Messages | `/messages` | Club message management |
-| Login | `/auth/login` | Email/password login |
+| Login | `/auth/login` | Email/password + OAuth + 2FA challenge UI |
 | Register | `/auth/register` | Account creation |
+| Forgot password | `/auth/forgot-password` | Request reset link (always shows generic success) |
+| Reset password | `/auth/reset-password?token=…` | Consume reset token, set new password |
+| OAuth callback | `/oauth/callback` | Finalizes session after Google / GitHub redirect |
+| Security | `/settings/security` | Manage TOTP / Email OTP / WebAuthn methods |
+| Admin users | `/admin/users` | Promote / deactivate users (admin only) |
+| Admin permissions | `/admin/permissions` | Edit role-to-permission matrix live (admin only) |
 | 404 | `*` | Not found page |
 
 ## API Integration Summary
