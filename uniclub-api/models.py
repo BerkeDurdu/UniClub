@@ -276,6 +276,15 @@ class EmailOTPChallenge(SQLModel, table=True):
     consumed_at: Optional[datetime] = Field(default=None)
 
 
+class PasswordResetToken(SQLModel, table=True):
+    __tablename__ = "password_reset_token"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="app_user.id", index=True)
+    token_hash: str = Field(index=True, unique=True)
+    expires_at: datetime
+    used_at: Optional[datetime] = Field(default=None)
+
+
 class WebAuthnCredential(SQLModel, table=True):
     __tablename__ = "webauthn_credential"
     id: Optional[int] = Field(default=None, primary_key=True)

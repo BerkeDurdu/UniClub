@@ -1,14 +1,31 @@
+import hashlib
+import secrets
+from datetime import date, datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
-from datetime import date
 
+from config import settings
 from database import get_session
-from models import User, UserRole, Member, Advisor, BoardMember, Club
-from schemas import UserRegister, UserLogin, UserResponse, UserMeResponse, TokenResponse
+from email_utils import send_email
+from models import User, UserRole, Member, Advisor, BoardMember, Club, PasswordResetToken
+from schemas import (
+    UserRegister,
+    UserLogin,
+    UserResponse,
+    UserMeResponse,
+    TokenResponse,
+    PasswordForgotRequest,
+    PasswordResetRequest,
+)
 from auth import hash_password, verify_password, create_access_token, create_challenge_token, get_current_user, get_role_permissions
 from routers.twofa import has_any_2fa, enabled_methods
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+
+
+def _hash_reset_token(raw: str) -> str:
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED, summary="Register a new user")
@@ -177,6 +194,64 @@ def get_me(current_user: User = Depends(get_current_user), session: Session = De
         profile=profile,
         permissions=perms,
     )
+
+
+@router.post("/password/forgot", summary="Request a password reset email")
+def password_forgot(data: PasswordForgotRequest, session: Session = Depends(get_session)):
+    email = data.email.lower().strip()
+    user = session.exec(select(User).where(User.email == email)).first()
+    if user and user.is_active:
+        raw_token = secrets.token_urlsafe(32)
+        record = PasswordResetToken(
+            user_id=user.id,
+            token_hash=_hash_reset_token(raw_token),
+            expires_at=datetime.utcnow() + timedelta(hours=1),
+        )
+        session.add(record)
+        session.commit()
+        link = f"{settings.frontend_base_url.rstrip('/')}/auth/reset-password?token={raw_token}"
+        send_email(
+            user.email,
+            "Reset your UniClub password",
+            (
+                "We received a request to reset your UniClub password.\n\n"
+                f"Open this link to set a new password (valid for 1 hour):\n{link}\n\n"
+                "If you did not request this, you can safely ignore this email."
+            ),
+        )
+    return {"ok": True}
+
+
+@router.post("/password/reset", summary="Consume a reset token and set a new password")
+def password_reset(data: PasswordResetRequest, session: Session = Depends(get_session)):
+    record = session.exec(
+        select(PasswordResetToken).where(PasswordResetToken.token_hash == _hash_reset_token(data.token))
+    ).first()
+    if not record or record.used_at is not None or record.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset token")
+
+    user = session.get(User, record.user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset token")
+
+    user.hashed_password = hash_password(data.new_password)
+    record.used_at = datetime.utcnow()
+    session.add(user)
+    session.add(record)
+
+    other_tokens = session.exec(
+        select(PasswordResetToken).where(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.id != record.id,
+            PasswordResetToken.used_at.is_(None),
+        )
+    ).all()
+    for t in other_tokens:
+        t.used_at = datetime.utcnow()
+        session.add(t)
+
+    session.commit()
+    return {"ok": True}
 
 
 def _link_role_profile(session: Session, user: User, email: str) -> None:

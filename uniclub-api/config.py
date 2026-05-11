@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     resend_api_key: Optional[str] = None
     resend_from: Optional[str] = None
 
+    # Frontend base for emailed links (password reset, etc.)
+    frontend_base_url: str = "http://localhost:5173"
+
     # WebAuthn
     webauthn_rp_id: str = "localhost"
     webauthn_rp_name: str = "UniClub"

@@ -232,3 +232,20 @@ export function logout(): void {
   window.localStorage.removeItem(AUTH_KEY);
   window.localStorage.removeItem("token");
 }
+
+export async function forgotPassword(email: string): Promise<void> {
+  try {
+    await apiClient.post("/auth/password/forgot", { email: email.trim().toLowerCase() });
+  } catch {
+    // Intentionally swallowed: the page always shows a generic success message
+    // so attackers cannot tell registered emails from unregistered ones.
+  }
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  try {
+    await apiClient.post("/auth/password/reset", { token, new_password: newPassword });
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}

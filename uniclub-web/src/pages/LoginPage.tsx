@@ -210,6 +210,9 @@ function LoginPage() {
             <p className="mt-4 text-sm text-slate">
               No account yet? <Link to="/auth/register" className="font-semibold text-ink underline">Create one</Link>
             </p>
+            <p className="mt-1 text-sm text-slate">
+              <Link to="/auth/forgot-password" className="font-semibold text-ink underline">Forgot password?</Link>
+            </p>
           </>
         ) : (
           <div className="mt-6 space-y-4">
