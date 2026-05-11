@@ -18,6 +18,7 @@ pyotp
 qrcode[pil]
 webauthn
 aiosmtplib
+slowapi
 # Test deps
 pytest
 pytest-cov

@@ -2,8 +2,10 @@ import hashlib
 import secrets
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlmodel import Session, select
+
+from rate_limit import limiter
 
 from config import settings
 from database import get_session
@@ -29,7 +31,8 @@ def _hash_reset_token(raw: str) -> str:
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED, summary="Register a new user")
-def register(data: UserRegister, session: Session = Depends(get_session)):
+@limiter.limit("5/minute")
+def register(request: Request, data: UserRegister, session: Session = Depends(get_session)):
     # Normalize email
     email = data.email.lower().strip()
 
@@ -118,7 +121,8 @@ def register(data: UserRegister, session: Session = Depends(get_session)):
 
 
 @router.post("/login", summary="Login. Returns either a JWT or a 2FA challenge.")
-def login(data: UserLogin, session: Session = Depends(get_session)):
+@limiter.limit("10/minute")
+def login(request: Request, data: UserLogin, session: Session = Depends(get_session)):
     email = data.email.lower().strip()
     user = session.exec(select(User).where(User.email == email)).first()
 
@@ -197,7 +201,8 @@ def get_me(current_user: User = Depends(get_current_user), session: Session = De
 
 
 @router.post("/password/forgot", summary="Request a password reset email")
-def password_forgot(data: PasswordForgotRequest, session: Session = Depends(get_session)):
+@limiter.limit("3/minute")
+def password_forgot(request: Request, data: PasswordForgotRequest, session: Session = Depends(get_session)):
     email = data.email.lower().strip()
     user = session.exec(select(User).where(User.email == email)).first()
     if user and user.is_active:
@@ -223,7 +228,8 @@ def password_forgot(data: PasswordForgotRequest, session: Session = Depends(get_
 
 
 @router.post("/password/reset", summary="Consume a reset token and set a new password")
-def password_reset(data: PasswordResetRequest, session: Session = Depends(get_session)):
+@limiter.limit("10/minute")
+def password_reset(request: Request, data: PasswordResetRequest, session: Session = Depends(get_session)):
     record = session.exec(
         select(PasswordResetToken).where(PasswordResetToken.token_hash == _hash_reset_token(data.token))
     ).first()

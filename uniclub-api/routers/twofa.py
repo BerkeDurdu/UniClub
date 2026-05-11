@@ -7,12 +7,14 @@ import secrets
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 import pyotp
 import qrcode
+
+from rate_limit import limiter
 
 from auth import get_current_user, decode_token, create_access_token
 from config import settings
@@ -310,7 +312,8 @@ class TwoFAVerifyWebAuthn(BaseModel):
 
 
 @router.post("/login/totp")
-def login_totp(payload: TwoFAVerifyTOTP, session: Session = Depends(get_session)):
+@limiter.limit("10/minute")
+def login_totp(request: Request, payload: TwoFAVerifyTOTP, session: Session = Depends(get_session)):
     user = _user_from_challenge(payload.challenge_token, session)
     rec = session.get(UserTOTP, user.id)
     if not rec or not rec.confirmed_at:
@@ -321,7 +324,8 @@ def login_totp(payload: TwoFAVerifyTOTP, session: Session = Depends(get_session)
 
 
 @router.post("/login/email/send")
-def login_email_send(payload: TwoFAEmailSend, session: Session = Depends(get_session)):
+@limiter.limit("3/minute")
+def login_email_send(request: Request, payload: TwoFAEmailSend, session: Session = Depends(get_session)):
     user = _user_from_challenge(payload.challenge_token, session)
     if not _user_has_email(session, user.id):
         raise HTTPException(status_code=400, detail="Email OTP not enabled")
@@ -343,7 +347,8 @@ def login_email_send(payload: TwoFAEmailSend, session: Session = Depends(get_ses
 
 
 @router.post("/login/email/verify")
-def login_email_verify(payload: TwoFAVerifyEmail, session: Session = Depends(get_session)):
+@limiter.limit("10/minute")
+def login_email_verify(request: Request, payload: TwoFAVerifyEmail, session: Session = Depends(get_session)):
     user = _user_from_challenge(payload.challenge_token, session)
     code_hash = _hash_code(payload.code)
     challenge = session.exec(

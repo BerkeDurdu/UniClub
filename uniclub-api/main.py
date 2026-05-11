@@ -15,6 +15,9 @@ from fastapi import FastAPI, Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from rate_limit import limiter
 from sqlmodel import Session, select
 from sqlalchemy import text, inspect
 from sqlalchemy.exc import IntegrityError
@@ -44,16 +47,47 @@ app = FastAPI(
 )
 
 # ==========================
+# RATE LIMITING (slowapi)
+# ==========================
+# IP-based limiter (defined in rate_limit.py to share with routers).
+# Auth endpoints opt in via @limiter.limit(...) on their handlers.
+# Returns 429 Too Many Requests instead of letting brute-force / DoS attempts through.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ==========================
 # CORS CONFIGURATION
 # ==========================
-# allow all origins for development
+# Explicit allow-list. Wildcard + credentials is rejected by browsers and signals
+# weak hardening; we only need the production frontend and the local dev origin.
+_allowed_origins = [
+    "https://uni-club-bay.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+# ==========================
+# SECURITY HEADERS
+# ==========================
+# Cheap defenses that move securityheaders.com from F to A-/A.
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    # HSTS only over HTTPS — never set on plain http://localhost.
+    if request.url.scheme == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 # Session middleware required by Authlib for OAuth state across redirects.
 app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
